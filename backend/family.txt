@@ -1,0 +1,95 @@
+0 HEAD
+1 SOUR ChatGPT
+1 GEDC
+2 VERS 5.5.1
+2 FORM LINEAGE-LINKED
+1 CHAR UTF-8
+0 @I1@ INDI
+1 NAME Somasuntharam
+1 SEX M
+1 FAMC @F1@
+
+0 @I2@ INDI
+1 NAME Arunasalam
+1 SEX M
+1 FAMC @F2@
+1 FAMS @F1@
+
+0 @I3@ INDI
+1 NAME Bavani
+1 SEX F
+1 FAMC @F3@
+1 FAMS @F1@
+
+0 @I4@ INDI
+1 NAME Somasundaram Pillai
+1 SEX M
+1 FAMC @F5@
+1 FAMS @F2@
+
+0 @I5@ INDI
+1 NAME Leelavathi
+1 SEX F
+1 FAMC @F4@
+1 FAMS @F2@
+
+0 @I6@ INDI
+1 NAME Viknarasah
+1 SEX M
+1 FAMC @F4@
+1 FAMS @F3@
+
+0 @I7@ INDI
+1 NAME Raja Rajeswari
+1 SEX F
+1 FAMC @F5@
+1 FAMS @F3@
+
+0 @I8@ INDI
+1 NAME Kulaveerasingham
+1 SEX M
+1 FAMS @F4@
+
+0 @I9@ INDI
+1 NAME Bhuvaneswari
+1 SEX F
+1 FAMS @F4@
+
+0 @I10@ INDI
+1 NAME Arunachalam
+1 SEX M
+1 FAMS @F5@
+
+0 @I11@ INDI
+1 NAME Valliamai
+1 SEX F
+1 FAMS @F5@
+
+0 @F1@ FAM
+1 HUSB @I2@
+1 WIFE @I3@
+1 CHIL @I1@
+
+0 @F2@ FAM
+1 HUSB @I4@
+1 WIFE @I5@
+1 CHIL @I2@
+
+0 @F3@ FAM
+1 HUSB @I6@
+1 WIFE @I7@
+1 CHIL @I3@
+
+0 @F4@ FAM
+1 HUSB @I8@
+1 WIFE @I9@
+1 CHIL @I5@
+1 CHIL @I6@
+
+0 @F5@ FAM
+1 HUSB @I10@
+1 WIFE @I11@
+1 CHIL @I4@
+1 CHIL @I7@
+
+0 TRLR

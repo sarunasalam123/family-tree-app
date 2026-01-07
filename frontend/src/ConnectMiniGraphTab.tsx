@@ -1,0 +1,254 @@
+import React, { useMemo, useRef, useState } from "react";
+import * as d3 from "d3";
+
+type PersonLite = { id: string; name: string };
+
+type ConnectStep = { id: string; via: string | null };
+type ConnectResult = { relationship?: string; path: ConnectStep[] };
+
+type MiniNode = { id: string; label: string; x: number; y: number };
+type MiniLink = { source: string; target: string; label?: string | null };
+
+export function ConnectMiniGraphTab({
+  people,
+  nameById,
+}: {
+  people: PersonLite[];
+  nameById: Map<string, string>;
+}) {
+  const [aId, setAId] = useState<string>("");
+  const [bId, setBId] = useState<string>("");
+  const [result, setResult] = useState<ConnectResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function findConnection() {
+    setError(null);
+    setResult(null);
+
+    if (!aId || !bId || aId === bId) {
+      setError("Pick two different people.");
+      return;
+    }
+
+    const url = `http://localhost:8000/api/connect?a=${encodeURIComponent(
+      aId
+    )}&b=${encodeURIComponent(bId)}`;
+
+    const r = await fetch(url);
+    if (!r.ok) {
+      setError(`Request failed (${r.status})`);
+      return;
+    }
+    const data = (await r.json()) as ConnectResult;
+
+    if (!data.path || data.path.length === 0) {
+      setError("No connection found.");
+      return;
+    }
+
+    setResult(data);
+  }
+
+  const graph = useMemo(() => {
+    if (!result?.path?.length) return null;
+
+    // Layout nodes in a simple left-to-right line; it looks good for shortest paths.
+    const spacingX = 220;
+    const y = 120;
+
+    const nodes: MiniNode[] = result.path.map((step, i) => ({
+      id: step.id,
+      label: nameById.get(step.id) ?? step.id,
+      x: i * spacingX,
+      y,
+    }));
+
+    const links: MiniLink[] = [];
+    for (let i = 0; i < result.path.length - 1; i++) {
+      links.push({
+        source: result.path[i].id,
+        target: result.path[i + 1].id,
+        label: result.path[i + 1].via ?? undefined, // edge label stored on the "to" node
+      });
+    }
+
+    return { nodes, links };
+  }, [result, nameById]);
+
+  return (
+    <div style={{ display: "grid", gap: 10 }}>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <label>
+          Person A{" "}
+          <select value={aId} onChange={(e) => setAId(e.target.value)}>
+            <option value="">Select…</option>
+            {people.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label>
+          Person B{" "}
+          <select value={bId} onChange={(e) => setBId(e.target.value)}>
+            <option value="">Select…</option>
+            {people.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <button onClick={findConnection} disabled={!aId || !bId || aId === bId}>
+          Find connection
+        </button>
+
+        {result?.relationship ? (
+          <div style={{ opacity: 0.85 }}>
+            <b>Relationship:</b> {result.relationship}
+          </div>
+        ) : null}
+      </div>
+
+      {error ? <div style={{ color: "crimson" }}>{error}</div> : null}
+
+      <div
+        style={{
+          border: "1px solid #ddd",
+          borderRadius: 12,
+          padding: 8,
+          height: 320,
+        }}
+      >
+        {graph ? <MiniGraph graph={graph} /> : <div style={{ opacity: 0.6 }}>Select two people to see the mini graph.</div>}
+      </div>
+    </div>
+  );
+}
+
+function MiniGraph({
+  graph,
+}: {
+  graph: { nodes: MiniNode[]; links: MiniLink[] };
+}) {
+  const svgRef = useRef<SVGSVGElement | null>(null);
+
+  React.useEffect(() => {
+    const svgEl = svgRef.current;
+    if (!svgEl) return;
+
+    const svg = d3.select(svgEl);
+    svg.selectAll("*").remove();
+
+    const width = svgEl.clientWidth || 800;
+    const height = svgEl.clientHeight || 320;
+
+    svg.attr("viewBox", `0 0 ${width} ${height}`);
+
+    // Root group for zoom/pan
+    const g = svg.append("g");
+
+    // Zoom
+    const zoom = d3
+      .zoom<SVGSVGElement, unknown>()
+      .scaleExtent([0.5, 2.5])
+      .on("zoom", (event) => g.attr("transform", event.transform));
+
+    svg.call(zoom as any);
+
+    // Center the path nicely
+    const minX = d3.min(graph.nodes, (d) => d.x) ?? 0;
+    const maxX = d3.max(graph.nodes, (d) => d.x) ?? 0;
+    const contentW = maxX - minX + 180;
+    const contentH = 200;
+
+    const offsetX = (width - contentW) / 2 - minX + 80;
+    const offsetY = (height - contentH) / 2;
+
+    const gx = g.append("g").attr("transform", `translate(${offsetX},${offsetY})`);
+
+    // Draw links
+    const linkG = gx.append("g");
+
+    linkG
+      .selectAll("path")
+      .data(graph.links)
+      .enter()
+      .append("path")
+      .attr("fill", "none")
+      .attr("stroke", "#333")
+      .attr("stroke-width", 2)
+      .attr("d", (d) => {
+        const s = graph.nodes.find((n) => n.id === d.source)!;
+        const t = graph.nodes.find((n) => n.id === d.target)!;
+        const sx = s.x + 160; // right edge of node box
+        const sy = s.y + 20;
+        const tx = t.x; // left edge
+        const ty = t.y + 20;
+
+        // Simple smooth curve
+        const mx = (sx + tx) / 2;
+        return `M ${sx} ${sy} C ${mx} ${sy}, ${mx} ${ty}, ${tx} ${ty}`;
+      });
+
+    // Link labels
+    linkG
+      .selectAll("text")
+      .data(graph.links)
+      .enter()
+      .append("text")
+      .attr("font-size", 12)
+      .attr("opacity", 0.75)
+      .attr("text-anchor", "middle")
+      .attr("x", (d) => {
+        const s = graph.nodes.find((n) => n.id === d.source)!;
+        const t = graph.nodes.find((n) => n.id === d.target)!;
+        return (s.x + 160 + t.x) / 2;
+      })
+      .attr("y", (d) => {
+        const s = graph.nodes.find((n) => n.id === d.source)!;
+        const t = graph.nodes.find((n) => n.id === d.target)!;
+        return (s.y + 20 + t.y + 20) / 2 - 8;
+      })
+      .text((d) => d.label ?? "");
+
+    // Draw nodes
+    const nodeG = gx.append("g");
+
+    const node = nodeG
+      .selectAll("g")
+      .data(graph.nodes)
+      .enter()
+      .append("g")
+      .attr("transform", (d) => `translate(${d.x},${d.y})`);
+
+    node
+      .append("rect")
+      .attr("rx", 10)
+      .attr("ry", 10)
+      .attr("width", 160)
+      .attr("height", 40)
+      .attr("fill", "#fff")
+      .attr("stroke", "#111")
+      .attr("stroke-width", 2);
+
+    node
+      .append("text")
+      .attr("x", 80)
+      .attr("y", 24)
+      .attr("text-anchor", "middle")
+      .attr("dominant-baseline", "middle")
+      .attr("font-size", 13)
+      .text((d) => truncate(d.label, 22));
+  }, [graph]);
+
+  return <svg ref={svgRef} width="100%" height="100%" />;
+}
+
+function truncate(s: string, n: number) {
+  if (s.length <= n) return s;
+  return s.slice(0, n - 1) + "…";
+}
