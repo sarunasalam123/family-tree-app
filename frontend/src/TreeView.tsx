@@ -251,11 +251,11 @@ function drawAncestryTree(opts: {
   return { rootBox };
 }
 
-export default function TreeView() {
+export default function TreeView({ initialRootId }: { initialRootId?: string } = {}) {
   const svgRef = useRef<SVGSVGElement | null>(null);
 
   const [people, setPeople] = useState<PersonLite[]>([]);
-  const [rootId, setRootId] = useState<string>("");
+  const [rootId, setRootId] = useState<string>(initialRootId ?? "");
 
   const [ancDepth, setAncDepth] = useState<number>(4);
   const [descDepth, setDescDepth] = useState<number>(6);
@@ -272,6 +272,11 @@ export default function TreeView() {
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // If parent component supplies an initial root, keep in sync
+  useEffect(() => {
+    if (initialRootId) setRootId(initialRootId);
+  }, [initialRootId]);
 
   useEffect(() => {
     if (!rootId) return;

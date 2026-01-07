@@ -191,3 +191,65 @@ def get_person(pid: str):
         "spouses": sorted(p.spouses),
         "children": sorted(p.children),
     }
+
+
+@app.get("/api/common_ancestor")
+def common_ancestor(a: str, b: str, anc_depth: int = 4, desc_depth: int = 6):
+    # Validate
+    if a not in people or b not in people:
+        raise HTTPException(status_code=404, detail="Unknown person id")
+
+    # Use backend helper to compute ancestor distances
+    anc_map_a = backend.get_ancestors(people, a)
+    anc_map_b = backend.get_ancestors(people, b)
+
+    common = set(anc_map_a) & set(anc_map_b)
+    if not common:
+        return {"lca": None, "relationship": "no relation found", "anc": None, "desc": None}
+
+    # Choose lowest-common ancestor minimizing sum of depths
+    lca = min(common, key=lambda x: anc_map_a[x] + anc_map_b[x])
+    rel = backend.relationship_name(anc_map_a[lca], anc_map_b[lca])
+
+    anc_tree = build_anc_tree(lca, anc_depth)
+    desc_tree = build_fam_tree(lca, desc_depth)
+
+    return {"lca": lca, "relationship": rel, "anc": anc_tree, "desc": desc_tree}
+
+
+@app.get("/api/common_pair")
+def common_pair(a: str, b: str, anc_depth: int = 4, desc_depth: int = 6):
+    """Find lowest common ancestor person (LCA) and return that person plus their spouse (if any).
+    Returns the same ancestor/descendant trees centered on the LCA person; the frontend can render the pair as a family.
+    """
+    if a not in people or b not in people:
+        raise HTTPException(status_code=404, detail="Unknown person id")
+
+    anc_map_a = backend.get_ancestors(people, a)
+    anc_map_b = backend.get_ancestors(people, b)
+    common = set(anc_map_a) & set(anc_map_b)
+    if not common:
+        return {"lca": None, "spouse": None, "relationship": "no relation found", "anc": None, "desc": None}
+
+    # compute minimal combined depth and return ALL common ancestors that achieve it
+    sums = {x: anc_map_a[x] + anc_map_b[x] for x in common}
+    min_sum = min(sums.values())
+    candidates = []
+    seen_pairs: set[frozenset] = set()
+    for x, s in sums.items():
+        if s == min_sum:
+            spouse = next(iter(people[x].spouses), None)
+            # canonicalize pair (unordered) to avoid duplicate pairings shown twice in reverse
+            pair_key = frozenset([x, spouse]) if spouse else frozenset([x])
+            if pair_key in seen_pairs:
+                continue
+            seen_pairs.add(pair_key)
+
+            rel = backend.relationship_name(anc_map_a[x], anc_map_b[x])
+            anc_tree = build_anc_tree(x, anc_depth)
+            desc_tree = build_fam_tree(x, desc_depth)
+            candidates.append({"lca": x, "spouse": spouse, "relationship": rel, "anc": anc_tree, "desc": desc_tree})
+
+    # keep backwards compat: return first candidate at top-level plus full list
+    first = candidates[0]
+    return {"lca": first["lca"], "spouse": first["spouse"], "relationship": first["relationship"], "anc": first["anc"], "desc": first["desc"], "candidates": candidates}

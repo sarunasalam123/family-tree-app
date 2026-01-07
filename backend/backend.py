@@ -137,22 +137,49 @@ def relationship_name(depth_a, depth_b):
         return "same person"
 
     if depth_a == 0:
+        # pid1 is an ancestor of pid2
         if depth_b == 1:
             return "parent"
-        return "ancestor"
+        if depth_b == 2:
+            return "grandparent"
+        # 3 -> great grandparent, 4 -> great great grandparent, etc.
+        k = depth_b - 2
+        return f"{'great ' * k}grandparent"
 
     if depth_b == 0:
+        # pid2 is an ancestor of pid1
         if depth_a == 1:
             return "child"
-        return "descendant"
+        if depth_a == 2:
+            return "grandchild"
+        k = depth_a - 2
+        return f"{'great ' * k}grandchild"
 
     if depth_a == 1 and depth_b == 1:
         return "sibling"
 
-    cousin_level = min(depth_a, depth_b) - 1
+    # aunt/uncle or niece/nephew (non-equal depths where one depth == 1)
+    if depth_a == 1 and depth_b >= 2:
+        k = depth_b - 2
+        prefix = "" if k == 0 else ("great " * k)
+        return f"{prefix}aunt/uncle"
+    if depth_b == 1 and depth_a >= 2:
+        k = depth_a - 2
+        prefix = "" if k == 0 else ("great " * k)
+        return f"{prefix}niece/nephew"
+
+    # degree (e.g. 1 = 1st cousin, 2 = 2nd cousin) is min(depth)-1
+    degree = min(depth_a, depth_b) - 1
     removed = abs(depth_a - depth_b)
 
-    name = f"{cousin_level + 1} cousin"
+    def ordinal(n: int) -> str:
+        if 10 <= (n % 100) <= 20:
+            suffix = "th"
+        else:
+            suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+        return f"{n}{suffix}"
+
+    name = f"{ordinal(degree)} cousin"
     if removed == 1:
         name += " once removed"
     elif removed > 1:
@@ -242,3 +269,21 @@ if __name__ == "__main__":
             print("  Relationship:", rel)
         else:
             print(f"\nIDs {a} or {b} not found in GEDCOM.")
+
+    # quick sanity checks for relationship naming
+    print("\nSanity relationship_name checks:")
+    cases = [
+        ((0,2), "grandparent"),
+        ((2,0), "grandchild"),
+        ((0,3), "great grandparent"),
+        ((3,0), "great grandchild"),
+        ((2,2), "1st cousin"),
+        ((2,3), "1st cousin once removed"),
+        ((3,3), "2nd cousin"),
+        ((1,2), "aunt/uncle"),
+        ((2,1), "niece/nephew"),
+    ]
+    for (da, db), expected in cases:
+        out = relationship_name(da, db)
+        print(f"depths=({da},{db}) => {out} (expected: {expected})")
+
