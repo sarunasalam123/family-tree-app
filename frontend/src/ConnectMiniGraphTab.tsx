@@ -14,15 +14,27 @@ type MiniLink = { source: string; target: string; label?: string | null };
 export function ConnectMiniGraphTab({
   people,
   nameById,
+  aId,
+  setAId,
+  bId,
+  setBId,
+  result,
+  setResult,
+  error,
+  setError,
 }: {
   people: PersonLite[];
   nameById: Map<string, string>;
+  aId: string;
+  setAId: (id: string) => void;
+  bId: string;
+  setBId: (id: string) => void;
+  result: ConnectResult | null;
+  setResult: (result: ConnectResult | null) => void;
+  error: string | null;
+  setError: (error: string | null) => void;
 }) {
   const password = usePassword();
-  const [aId, setAId] = useState<string>("");
-  const [bId, setBId] = useState<string>("");
-  const [result, setResult] = useState<ConnectResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   async function findConnection() {
     setError(null);

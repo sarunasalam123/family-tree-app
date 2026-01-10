@@ -20,6 +20,31 @@ export default function App() {
   const [people, setPeople] = useState<PersonLite[]>([]);
   const [tab, setTab] = useState<"tree" | "connect" | "common" | "commonpair">("tree");
   const [rootId, setRootId] = useState<string>("");
+  
+  // Persist search selections and results across tab switches
+  // Common Ancestor Tab
+  const [commonAId, setCommonAId] = useState<string>("");
+  const [commonBId, setCommonBId] = useState<string>("");
+  const [commonResult, setCommonResult] = useState<any>(null);
+  const [commonLoading, setCommonLoading] = useState(false);
+  const [commonError, setCommonError] = useState<string | null>(null);
+  const [commonPrunedTree, setCommonPrunedTree] = useState<any>(null);
+  const [commonPaths, setCommonPaths] = useState<any>(null);
+  
+  // Connect Tab
+  const [connectAId, setConnectAId] = useState<string>("");
+  const [connectBId, setConnectBId] = useState<string>("");
+  const [connectResult, setConnectResult] = useState<any>(null);
+  const [connectError, setConnectError] = useState<string | null>(null);
+  
+  // Common Ancestor Pair Tab
+  const [commonPairAId, setCommonPairAId] = useState<string>("");
+  const [commonPairBId, setCommonPairBId] = useState<string>("");
+  const [commonPairResult, setCommonPairResult] = useState<any>(null);
+  const [commonPairLoading, setCommonPairLoading] = useState(false);
+  const [commonPairError, setCommonPairError] = useState<string | null>(null);
+  const [commonPairCandidates, setCommonPairCandidates] = useState<any>(null);
+  const [commonPairPrunedTrees, setCommonPairPrunedTrees] = useState<any>(null);
 
   const handleLogin = (pwd: string) => {
     setPassword(pwd);
@@ -80,12 +105,26 @@ export default function App() {
 
         <div style={{ flex: 1 }}>
           {tab === "tree" ? <TreeView key={rootId} initialRootId={rootId} /> : null}
-          {tab === "connect" ? <div style={{ padding: 16 }}><ConnectMiniGraphTab people={people} nameById={nameById} /></div> : null}
+          {tab === "connect" ? <div style={{ padding: 16 }}><ConnectMiniGraphTab people={people} nameById={nameById} aId={connectAId} setAId={setConnectAId} bId={connectBId} setBId={setConnectBId} result={connectResult} setResult={setConnectResult} error={connectError} setError={setConnectError} /></div> : null}
           {tab === "common" ? (
             <div style={{ padding: 16 }}>
               <CommonAncestorTab
                 people={people}
                 nameById={nameById}
+                aId={commonAId}
+                setAId={setCommonAId}
+                bId={commonBId}
+                setBId={setCommonBId}
+                result={commonResult}
+                setResult={setCommonResult}
+                loading={commonLoading}
+                setLoading={setCommonLoading}
+                error={commonError}
+                setError={setCommonError}
+                prunedTree={commonPrunedTree}
+                setPrunedTree={setCommonPrunedTree}
+                paths={commonPaths}
+                setPaths={setCommonPaths}
                 onOpenInTree={(id) => {
                   setRootId(id);
                   setTab("tree");
@@ -99,6 +138,20 @@ export default function App() {
               <CommonAncestorPairTab
                 people={people}
                 nameById={nameById}
+                aId={commonPairAId}
+                setAId={setCommonPairAId}
+                bId={commonPairBId}
+                setBId={setCommonPairBId}
+                result={commonPairResult}
+                setResult={setCommonPairResult}
+                loading={commonPairLoading}
+                setLoading={setCommonPairLoading}
+                error={commonPairError}
+                setError={setCommonPairError}
+                candidates={commonPairCandidates}
+                setCandidates={setCommonPairCandidates}
+                prunedTrees={commonPairPrunedTrees}
+                setPrunedTrees={setCommonPairPrunedTrees}
                 onOpenInTree={(id) => {
                   setRootId(id);
                   setTab("tree");

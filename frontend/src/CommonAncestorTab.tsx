@@ -11,20 +11,42 @@ type ApiNode = any;
 export default function CommonAncestorTab({
   people,
   nameById,
+  aId,
+  setAId,
+  bId,
+  setBId,
+  result,
+  setResult,
+  loading,
+  setLoading,
+  error,
+  setError,
+  prunedTree,
+  setPrunedTree,
+  paths,
+  setPaths,
   onOpenInTree,
 }: {
   people: PersonLite[];
   nameById: Map<string, string>;
+  aId: string;
+  setAId: (id: string) => void;
+  bId: string;
+  setBId: (id: string) => void;
+  result: any;
+  setResult: (result: any) => void;
+  loading: boolean;
+  setLoading: (loading: boolean) => void;
+  error: string | null;
+  setError: (error: string | null) => void;
+  prunedTree: any;
+  setPrunedTree: (tree: any) => void;
+  paths: any;
+  setPaths: (paths: any) => void;
   onOpenInTree: (id: string) => void;
 }) {
   const password = usePassword();
-  const [aId, setAId] = useState("");
-  const [bId, setBId] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<null | { lca: string | null; relationship: string; anc: any; desc: any }>(null);
-  const [paths, setPaths] = useState<null | { nodes: any[]; links: any[] }>(null);
-  const [prunedTree, setPrunedTree] = useState<any | null>(null);
+  const [prunedTreeLocal, setPrunedTreeLocal] = useState<any | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
 
   async function find() {

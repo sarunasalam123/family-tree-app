@@ -289,13 +289,13 @@ export default function TreeView({ initialRootId }: { initialRootId?: string } =
   useEffect(() => {
     if (!rootId) return;
 
-    fetch(`http://localhost:8000/api/ancestors?root=${encodeURIComponent(rootId)}&depth=${ancDepth}`, {
+    fetch(`http://localhost:8000/api/ancestors?root=${encodeURIComponent(rootId)}&depth=${ancDepth + 1}`, {
       headers: { Authorization: `Bearer ${password}` },
     })
       .then((r) => r.json())
       .then(setAnc);
 
-    fetch(`http://localhost:8000/api/tree?root=${encodeURIComponent(rootId)}&depth=${descDepth}`, {
+    fetch(`http://localhost:8000/api/tree?root=${encodeURIComponent(rootId)}&depth=${descDepth + 1}`, {
       headers: { Authorization: `Bearer ${password}` },
     })
       .then((r) => r.json())

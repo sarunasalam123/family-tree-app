@@ -11,22 +11,43 @@ type ApiNode = any;
 export default function CommonAncestorPairTab({
   people,
   nameById,
+  aId,
+  setAId,
+  bId,
+  setBId,
+  result,
+  setResult,
+  loading,
+  setLoading,
+  error,
+  setError,
+  candidates,
+  setCandidates,
+  prunedTrees,
+  setPrunedTrees,
   onOpenInTree,
 }: {
   people: PersonLite[];
   nameById: Map<string, string>;
+  aId: string;
+  setAId: (id: string) => void;
+  bId: string;
+  setBId: (id: string) => void;
+  result: any;
+  setResult: (result: any) => void;
+  loading: boolean;
+  setLoading: (loading: boolean) => void;
+  error: string | null;
+  setError: (error: string | null) => void;
+  candidates: any;
+  setCandidates: (candidates: any) => void;
+  prunedTrees: any;
+  setPrunedTrees: (trees: any) => void;
   onOpenInTree: (id: string) => void;
 }) {
   const password = usePassword();
-  const [aId, setAId] = useState("");
-  const [bId, setBId] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<null | { lca: string | null; spouse: string | null; relationship: string; anc: any; desc: any }>(null);
-  const [candidates, setCandidates] = useState<any[] | null>(null);
   const [selectedCandidate, setSelectedCandidate] = useState<number>(0);
   const [prunedTree, setPrunedTree] = useState<any | null>(null);
-  const [prunedTrees, setPrunedTrees] = useState<any[] | null>(null);
   const [renderError, setRenderError] = useState<string | null>(null);
   const [debugOpen, setDebugOpen] = useState<boolean>(false);
   const [debugData, setDebugData] = useState<any | null>(null);
