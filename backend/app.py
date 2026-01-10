@@ -1,19 +1,33 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from typing import Any
+from typing import Any, Optional
+import secrets
 
 import backend
 
 GED_PATH = "family.ged"
+PASSWORD = "Viknarasah"
 
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:5174", "http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+def verify_password(authorization: Optional[str] = Header(None)):
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Missing authorization header")
+    
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Invalid authorization format")
+    
+    token = authorization[7:]
+    if not secrets.compare_digest(token, PASSWORD):
+        raise HTTPException(status_code=401, detail="Invalid password")
+    return True
 
 people, families = backend.parse_gedcom(GED_PATH)
 
@@ -149,7 +163,7 @@ def build_anc_tree(root_person_id: str, depth: int = 4):
 graph = backend.build_graph(people)
 
 @app.get("/api/connect")
-def connect(a: str, b: str):
+def connect(a: str, b: str, _: bool = Depends(verify_password)):
     if a not in people or b not in people:
         raise HTTPException(status_code=404, detail="Unknown person id")
 
@@ -162,22 +176,22 @@ def connect(a: str, b: str):
 
     return {"path": path, "relationship": relationship}
 @app.get("/api/people")
-def list_people():
+def list_people(_: bool = Depends(verify_password)):
     out = []
     for pid, p in people.items():
         out.append({"id": pid, "name": clean_name(p.name, pid), "sex": p.sex})
     out.sort(key=lambda x: x["name"])
     return out
 @app.get("/api/ancestors")
-def get_ancestors(root: str, depth: int = 4):
+def get_ancestors(root: str, depth: int = 4, _: bool = Depends(verify_password)):
     return build_anc_tree(root, depth)
 
 @app.get("/api/tree")
-def get_tree(root: str, depth: int = 6):
+def get_tree(root: str, depth: int = 6, _: bool = Depends(verify_password)):
     return build_fam_tree(root, depth)
 
 @app.get("/api/person/{pid}")
-def get_person(pid: str):
+def get_person(pid: str, _: bool = Depends(verify_password)):
     if pid not in people:
         raise HTTPException(status_code=404, detail=f"Unknown person id: {pid}")
 
@@ -194,7 +208,7 @@ def get_person(pid: str):
 
 
 @app.get("/api/common_ancestor")
-def common_ancestor(a: str, b: str, anc_depth: int = 4, desc_depth: int = 6):
+def common_ancestor(a: str, b: str, anc_depth: int = 4, desc_depth: int = 6, _: bool = Depends(verify_password)):
     # Validate
     if a not in people or b not in people:
         raise HTTPException(status_code=404, detail="Unknown person id")
@@ -218,7 +232,7 @@ def common_ancestor(a: str, b: str, anc_depth: int = 4, desc_depth: int = 6):
 
 
 @app.get("/api/common_pair")
-def common_pair(a: str, b: str, anc_depth: int = 4, desc_depth: int = 6):
+def common_pair(a: str, b: str, anc_depth: int = 4, desc_depth: int = 6, _: bool = Depends(verify_password)):
     """Find lowest common ancestor person (LCA) and return that person plus their spouse (if any).
     Returns the same ancestor/descendant trees centered on the LCA person; the frontend can render the pair as a family.
     """
@@ -253,3 +267,7 @@ def common_pair(a: str, b: str, anc_depth: int = 4, desc_depth: int = 6):
     # keep backwards compat: return first candidate at top-level plus full list
     first = candidates[0]
     return {"lca": first["lca"], "spouse": first["spouse"], "relationship": first["relationship"], "anc": first["anc"], "desc": first["desc"], "candidates": candidates}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="127.0.0.1", port=8000)

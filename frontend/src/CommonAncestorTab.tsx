@@ -1,5 +1,8 @@
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import React, { useState, useRef, useEffect } from "react";
 import * as d3 from "d3";
+import { usePassword } from "./App";
+import { SearchableSelect } from "./SearchableSelect";
 
 type PersonLite = { id: string; name: string };
 
@@ -14,6 +17,7 @@ export default function CommonAncestorTab({
   nameById: Map<string, string>;
   onOpenInTree: (id: string) => void;
 }) {
+  const password = usePassword();
   const [aId, setAId] = useState("");
   const [bId, setBId] = useState("");
   const [loading, setLoading] = useState(false);
@@ -33,7 +37,9 @@ export default function CommonAncestorTab({
     setLoading(true);
     try {
       const qs = `a=${encodeURIComponent(aId)}&b=${encodeURIComponent(bId)}`;
-      const r = await fetch(`http://localhost:8000/api/common_ancestor?${qs}`);
+      const r = await fetch(`http://localhost:8000/api/common_ancestor?${qs}`, {
+        headers: { Authorization: `Bearer ${password}` },
+      });
       if (!r.ok) throw new Error(`Request failed ${r.status}`);
       const data = await r.json();
       setResult(data);
@@ -241,7 +247,7 @@ export default function CommonAncestorTab({
           ax = rootPos.x - SPOUSE_OFFSET_X;
           ay = rootPos.y;
         }
-        if (!ppos) spouseBoxes.push({ pid: husbId, name: nameById.get(husbId) ?? husbId, x: ax, y: ay, promote: isRootFamily });
+        if (!ppos) spouseBoxes.push({ pid: husbId, name: nameById.get(husbId) ?? husbId, x: ax, y: ay } as any);
       }
 
       if (wifeId) {
@@ -252,7 +258,7 @@ export default function CommonAncestorTab({
           ax = rootPos.x + SPOUSE_OFFSET_X;
           ay = rootPos.y;
         }
-        if (!ppos) spouseBoxes.push({ pid: wifeId, name: nameById.get(wifeId) ?? wifeId, x: ax, y: ay, promote: isRootFamily });
+        if (!ppos) spouseBoxes.push({ pid: wifeId, name: nameById.get(wifeId) ?? wifeId, x: ax, y: ay } as any);
       }
     }
 
@@ -359,28 +365,24 @@ export default function CommonAncestorTab({
   return (
     <div style={{ display: "grid", gap: 12 }}>
       <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-        <label>
+        <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           Person A
-          <select value={aId} onChange={(e) => setAId(e.target.value)}>
-            <option value="">Select…</option>
-            {people.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
+          <SearchableSelect
+            options={people}
+            value={aId}
+            onChange={setAId}
+            placeholder="Search person…"
+          />
         </label>
 
-        <label>
+        <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           Person B
-          <select value={bId} onChange={(e) => setBId(e.target.value)}>
-            <option value="">Select…</option>
-            {people.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
+          <SearchableSelect
+            options={people}
+            value={bId}
+            onChange={setBId}
+            placeholder="Search person…"
+          />
         </label>
 
         <button onClick={find} disabled={!aId || !bId || aId === bId || loading}>

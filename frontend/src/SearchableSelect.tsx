@@ -1,3 +1,4 @@
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import React, { useState, useRef, useEffect } from "react";
 import "./SearchableSelect.css";
 

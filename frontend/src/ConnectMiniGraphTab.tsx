@@ -1,5 +1,7 @@
 import React, { useMemo, useRef, useState } from "react";
 import * as d3 from "d3";
+import { usePassword } from "./App";
+import { SearchableSelect } from "./SearchableSelect";
 
 type PersonLite = { id: string; name: string };
 
@@ -16,6 +18,7 @@ export function ConnectMiniGraphTab({
   people: PersonLite[];
   nameById: Map<string, string>;
 }) {
+  const password = usePassword();
   const [aId, setAId] = useState<string>("");
   const [bId, setBId] = useState<string>("");
   const [result, setResult] = useState<ConnectResult | null>(null);
@@ -34,7 +37,9 @@ export function ConnectMiniGraphTab({
       aId
     )}&b=${encodeURIComponent(bId)}`;
 
-    const r = await fetch(url);
+    const r = await fetch(url, {
+      headers: { Authorization: `Bearer ${password}` },
+    });
     if (!r.ok) {
       setError(`Request failed (${r.status})`);
       return;
@@ -78,28 +83,24 @@ export function ConnectMiniGraphTab({
   return (
     <div style={{ display: "grid", gap: 10 }}>
       <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-        <label>
+        <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           Person A{" "}
-          <select value={aId} onChange={(e) => setAId(e.target.value)}>
-            <option value="">Select…</option>
-            {people.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
+          <SearchableSelect
+            options={people}
+            value={aId}
+            onChange={setAId}
+            placeholder="Search person…"
+          />
         </label>
 
-        <label>
+        <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           Person B{" "}
-          <select value={bId} onChange={(e) => setBId(e.target.value)}>
-            <option value="">Select…</option>
-            {people.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
+          <SearchableSelect
+            options={people}
+            value={bId}
+            onChange={setBId}
+            placeholder="Search person…"
+          />
         </label>
 
         <button onClick={findConnection} disabled={!aId || !bId || aId === bId}>

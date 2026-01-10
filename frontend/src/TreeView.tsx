@@ -1,5 +1,8 @@
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import React, { useEffect, useRef, useState } from "react";
 import * as d3 from "d3";
+import { usePassword } from "./App";
+import { SearchableSelect } from "./SearchableSelect";
 
 type PersonLite = { id: string; name: string };
 
@@ -10,6 +13,8 @@ type ApiNode =
 type ExtraLink = { from_fam: string; to_person: string };
 
 type ApiResponse = { tree: ApiNode; extra_links: ExtraLink[] };
+
+type Link = { from?: string; to?: string; kind: string; sx?: number; sy?: number; tx?: number; ty?: number };
 
 function drawAncestryTree(opts: {
   g: d3.Selection<SVGGElement, unknown, null, undefined>;
@@ -252,6 +257,7 @@ function drawAncestryTree(opts: {
 }
 
 export default function TreeView({ initialRootId }: { initialRootId?: string } = {}) {
+  const password = usePassword();
   const svgRef = useRef<SVGSVGElement | null>(null);
 
   const [people, setPeople] = useState<PersonLite[]>([]);
@@ -264,14 +270,16 @@ export default function TreeView({ initialRootId }: { initialRootId?: string } =
   const [desc, setDesc] = useState<ApiResponse | null>(null);
 
   useEffect(() => {
-    fetch("http://localhost:8000/api/people")
+    fetch("http://localhost:8000/api/people", {
+      headers: { Authorization: `Bearer ${password}` },
+    })
       .then((r) => r.json())
       .then((data: PersonLite[]) => {
         setPeople(data);
         if (data.length && !rootId) setRootId(data[0].id);
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [password]);
 
   // If parent component supplies an initial root, keep in sync
   useEffect(() => {
@@ -281,14 +289,18 @@ export default function TreeView({ initialRootId }: { initialRootId?: string } =
   useEffect(() => {
     if (!rootId) return;
 
-    fetch(`http://localhost:8000/api/ancestors?root=${encodeURIComponent(rootId)}&depth=${ancDepth}`)
+    fetch(`http://localhost:8000/api/ancestors?root=${encodeURIComponent(rootId)}&depth=${ancDepth}`, {
+      headers: { Authorization: `Bearer ${password}` },
+    })
       .then((r) => r.json())
       .then(setAnc);
 
-    fetch(`http://localhost:8000/api/tree?root=${encodeURIComponent(rootId)}&depth=${descDepth}`)
+    fetch(`http://localhost:8000/api/tree?root=${encodeURIComponent(rootId)}&depth=${descDepth}`, {
+      headers: { Authorization: `Bearer ${password}` },
+    })
       .then((r) => r.json())
       .then(setDesc);
-  }, [rootId, ancDepth, descDepth]);
+  }, [rootId, ancDepth, descDepth, password]);
 
   useEffect(() => {
     if (!svgRef.current || !anc || !desc) return;
@@ -348,13 +360,12 @@ export default function TreeView({ initialRootId }: { initialRootId?: string } =
 
         <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
           Root:
-          <select value={rootId} onChange={(e) => setRootId(e.target.value)} style={{ padding: 6, borderRadius: 10 }}>
-            {people.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name} ({p.id})
-              </option>
-            ))}
-          </select>
+          <SearchableSelect
+            options={people.map(p => ({ id: p.id, name: `${p.name} (${p.id})` }))}
+            value={rootId}
+            onChange={setRootId}
+            placeholder="Search person…"
+          />
         </label>
 
         <label style={{ display: "flex", gap: 10, alignItems: "center" }}>
