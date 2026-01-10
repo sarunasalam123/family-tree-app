@@ -204,7 +204,7 @@ export default function CommonAncestorTab({
       .attr("text-anchor", "middle")
       .attr("dominant-baseline", "middle")
       .attr("font-size", 12)
-      .text((d: any) => nameById.get(d.data.id) ?? d.data.id);
+      .text((d: any) => nameById.get(d.data.id) ?? "unknown");
 
     // family junctions as small circles
     const famNodes = root.descendants().filter((d) => d.data.type === "family");
@@ -247,7 +247,7 @@ export default function CommonAncestorTab({
           ax = rootPos.x - SPOUSE_OFFSET_X;
           ay = rootPos.y;
         }
-        if (!ppos) spouseBoxes.push({ pid: husbId, name: nameById.get(husbId) ?? husbId, x: ax, y: ay } as any);
+        if (!ppos) spouseBoxes.push({ pid: husbId, name: nameById.get(husbId) ?? "unknown", x: ax, y: ay } as any);
       }
 
       if (wifeId) {
@@ -258,7 +258,7 @@ export default function CommonAncestorTab({
           ax = rootPos.x + SPOUSE_OFFSET_X;
           ay = rootPos.y;
         }
-        if (!ppos) spouseBoxes.push({ pid: wifeId, name: nameById.get(wifeId) ?? wifeId, x: ax, y: ay } as any);
+        if (!ppos) spouseBoxes.push({ pid: wifeId, name: nameById.get(wifeId) ?? "unknown", x: ax, y: ay } as any);
       }
     }
 
@@ -395,7 +395,7 @@ export default function CommonAncestorTab({
       {result ? (
         <div style={{ display: "grid", gap: 8 }}>
           <div>
-            <b>Common ancestor:</b> {result.lca ? nameById.get(result.lca) ?? result.lca : "None"} ({result.lca})
+            <b>Common ancestor:</b> {result.lca ? nameById.get(result.lca) ?? "unknown" : "None"} ({result.lca})
           </div>
           <div>
             <b>Relationship:</b> {result.relationship}

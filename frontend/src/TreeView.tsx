@@ -123,7 +123,7 @@ function drawAncestryTree(opts: {
       const ppos = pos.get(`person:${husbId}`);
       const ax = ppos ? ppos.x : jx - SPOUSE_OFFSET_X;
       const ay = ppos ? ppos.y : jy;
-      if (!ppos) spouseBoxes.push({ pid: husbId, name: nameById.get(husbId) ?? husbId, x: ax, y: ay });
+      if (!ppos) spouseBoxes.push({ pid: husbId, name: nameById.get(husbId) ?? "unknown", x: ax, y: ay });
       links.push({ sx: ax, sy: ay, tx: jx, ty: jy, kind: "normal" });
     }
 
@@ -131,7 +131,7 @@ function drawAncestryTree(opts: {
       const ppos = pos.get(`person:${wifeId}`);
       const ax = ppos ? ppos.x : jx + SPOUSE_OFFSET_X;
       const ay = ppos ? ppos.y : jy;
-      if (!ppos) spouseBoxes.push({ pid: wifeId, name: nameById.get(wifeId) ?? wifeId, x: ax, y: ay });
+      if (!ppos) spouseBoxes.push({ pid: wifeId, name: nameById.get(wifeId) ?? "unknown", x: ax, y: ay });
       links.push({ sx: ax, sy: ay, tx: jx, ty: jy, kind: "normal" });
     }
 
@@ -305,7 +305,8 @@ export default function TreeView({ initialRootId }: { initialRootId?: string } =
   useEffect(() => {
     if (!svgRef.current || !anc || !desc) return;
 
-    const nameById = new Map(people.map((p) => [p.id, p.name]));
+    const getBaseName = (displayName: string) => displayName.split(",")[0];
+    const nameById = new Map(people.map((p) => [p.id, getBaseName(p.name)]));
 
     const svg = d3.select(svgRef.current);
     svg.selectAll("*").remove();
@@ -361,7 +362,7 @@ export default function TreeView({ initialRootId }: { initialRootId?: string } =
         <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
           Root:
           <SearchableSelect
-            options={people.map(p => ({ id: p.id, name: `${p.name} (${p.id})` }))}
+            options={people.map(p => ({ id: p.id, name: p.name }))}
             value={rootId}
             onChange={setRootId}
             placeholder="Search person…"

@@ -47,7 +47,7 @@ export default function CommonAncestorPairTab({
           const exists = (node.children || []).some((ch: any) => ch.type === "person" && ch.id === toPerson);
           if (!exists) {
             node.children = node.children || [];
-            node.children.push({ type: "person", id: toPerson, name: nameById.get(toPerson) ?? toPerson, sex: null, children: [] });
+            node.children.push({ type: "person", id: toPerson, name: nameById.get(toPerson) ?? "unknown", sex: null, children: [] });
           }
           found = true;
         }
@@ -295,7 +295,7 @@ export default function CommonAncestorPairTab({
           .attr("text-anchor", "middle")
           .attr("dominant-baseline", "middle")
           .attr("font-size", 12)
-          .text((d: any) => nameById.get(d.data.id) ?? d.data.id);
+          .text((d: any) => nameById.get(d.data.id) ?? "unknown");
 
         // family junctions
         const famNodes = root.descendants().filter((d) => d.data.type === "family");
@@ -336,7 +336,7 @@ export default function CommonAncestorPairTab({
               ax = rootFamilyPos.x - SPOUSE_OFFSET_X;
               ay = rootFamilyPos.y - (BOX_H + 20);
             }
-            if (!ppos) spouseBoxes.push({ pid: husbId, name: nameById.get(husbId) ?? husbId, x: ax, y: ay, promote: isRootFamily });
+            if (!ppos) spouseBoxes.push({ pid: husbId, name: nameById.get(husbId) ?? "unknown", x: ax, y: ay, promote: isRootFamily });
           }
 
           if (wifeId) {
@@ -347,7 +347,7 @@ export default function CommonAncestorPairTab({
               ax = rootFamilyPos.x + SPOUSE_OFFSET_X;
               ay = rootFamilyPos.y - (BOX_H + 20);
             }
-            if (!ppos) spouseBoxes.push({ pid: wifeId, name: nameById.get(wifeId) ?? wifeId, x: ax, y: ay, promote: isRootFamily });
+            if (!ppos) spouseBoxes.push({ pid: wifeId, name: nameById.get(wifeId) ?? "unknown", x: ax, y: ay, promote: isRootFamily });
           }
         }
 
@@ -586,7 +586,7 @@ export default function CommonAncestorPairTab({
         .attr("text-anchor", "middle")
         .attr("dominant-baseline", "middle")
         .attr("font-size", 12)
-        .text((d: any) => nameById.get(d.data.id) ?? d.data.id);
+        .text((d: any) => nameById.get(d.data.id) ?? "unknown");
 
       // family junctions
       const famNodes = root.descendants().filter((d) => d.data.type === "family");
@@ -630,7 +630,7 @@ export default function CommonAncestorPairTab({
             // place parent above the family junction
             ay = rootFamilyPos.y - (BOX_H + 20);
           }
-          if (!ppos) spouseBoxes.push({ pid: husbId, name: nameById.get(husbId) ?? husbId, x: ax, y: ay, promote: isRootFamily });
+          if (!ppos) spouseBoxes.push({ pid: husbId, name: nameById.get(husbId) ?? "unknown", x: ax, y: ay, promote: isRootFamily });
         }
 
         if (wifeId) {
@@ -642,7 +642,7 @@ export default function CommonAncestorPairTab({
             // place parent above the family junction
             ay = rootFamilyPos.y - (BOX_H + 20);
           }
-          if (!ppos) spouseBoxes.push({ pid: wifeId, name: nameById.get(wifeId) ?? wifeId, x: ax, y: ay, promote: isRootFamily });
+          if (!ppos) spouseBoxes.push({ pid: wifeId, name: nameById.get(wifeId) ?? "unknown", x: ax, y: ay, promote: isRootFamily });
         }
       }
 
@@ -784,7 +784,7 @@ export default function CommonAncestorPairTab({
                   onClick={() => { setSelectedCandidate(i); const t = buildPrunedFromDesc(c.desc.tree, c.lca, c.spouse, c.desc.extra_links || []); setPrunedTree(t?.[0] ?? null); }}
                   style={{ fontWeight: i === selectedCandidate ? 800 : 400 }}
                 >
-                  {nameById.get(c.lca) ?? c.lca} {c.spouse ? `+ ${nameById.get(c.spouse) ?? c.spouse}` : ''}
+                  {nameById.get(c.lca) ?? "unknown"} {c.spouse ? `+ ${nameById.get(c.spouse) ?? "unknown"}` : ''}
                 </button>
               ))}
             </div>
@@ -796,8 +796,8 @@ export default function CommonAncestorPairTab({
             return (
               <>
                 <div>
-                  <b>Common ancestor pair:</b> {active.lca ? nameById.get(active.lca) ?? active.lca : "None"}
-                  {active.spouse ? ` + ${nameById.get(active.spouse) ?? active.spouse}` : ""}
+                  <b>Common ancestor pair:</b> {active.lca ? nameById.get(active.lca) ?? "unknown" : "None"}
+                  {active.spouse ? ` + ${nameById.get(active.spouse) ?? "unknown"}` : ""}
                 </div>
                 <div>
                   <b>Relationship:</b> {active.relationship}
@@ -831,7 +831,7 @@ export default function CommonAncestorPairTab({
             <div style={{ display: 'flex', gap: 12, marginTop: 12 }}>
               {candidates!.map((c: any, i: number) => (
                 <div key={i} style={{ border: '1px solid #ddd', borderRadius: 8, padding: 8, flex: 1 }}>
-                  <div style={{ fontWeight: 700, marginBottom: 6 }}>{nameById.get(c.lca) ?? c.lca}{c.spouse ? ` + ${nameById.get(c.spouse) ?? c.spouse}` : ''}</div>
+                  <div style={{ fontWeight: 700, marginBottom: 6 }}>{nameById.get(c.lca) ?? "unknown"}{c.spouse ? ` + ${nameById.get(c.spouse) ?? "unknown"}` : ''}</div>
                   <div style={{ display: 'flex', gap: 8 }}>
                     {prunedTrees![i] && prunedTrees![i].length > 1 ? (
                       prunedTrees![i].map((t: any, j: number) => (

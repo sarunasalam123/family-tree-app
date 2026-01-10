@@ -179,7 +179,38 @@ def connect(a: str, b: str, _: bool = Depends(verify_password)):
 def list_people(_: bool = Depends(verify_password)):
     out = []
     for pid, p in people.items():
-        out.append({"id": pid, "name": clean_name(p.name, pid), "sex": p.sex})
+        name = clean_name(p.name, pid)
+        if name.lower() != "unknown":
+            # Build display name with spouse or parent info
+            display_name = name
+            
+            # Check if person has spouse(s) and spouse is not "unknown"
+            spouse_shown = False
+            if p.spouses:
+                # Get first spouse (assuming one primary spouse)
+                spouse_id = next(iter(p.spouses))
+                spouse_obj = people.get(spouse_id)
+                if spouse_obj:
+                    spouse_name = clean_name(spouse_obj.name, spouse_id)
+                    # Only show spouse if they're not "unknown"
+                    if spouse_name.lower() != "unknown":
+                        sex = p.sex or "unknown"
+                        if sex.lower() in ["m", "male"]:
+                            display_name = f"{name}, husband of {spouse_name}"
+                        else:
+                            display_name = f"{name}, wife of {spouse_name}"
+                        spouse_shown = True
+            
+            # If no spouse shown, use father if available
+            if not spouse_shown and p.famc:
+                fam = families.get(p.famc)
+                if fam and fam.husb:
+                    father_obj = people.get(fam.husb)
+                    if father_obj:
+                        father_name = clean_name(father_obj.name, fam.husb)
+                        display_name = f"{name}, child of {father_name}"
+            
+            out.append({"id": pid, "name": display_name, "sex": p.sex})
     out.sort(key=lambda x: x["name"])
     return out
 @app.get("/api/ancestors")
@@ -208,7 +239,7 @@ def get_person(pid: str, _: bool = Depends(verify_password)):
 
 
 @app.get("/api/common_ancestor")
-def common_ancestor(a: str, b: str, anc_depth: int = 4, desc_depth: int = 6, _: bool = Depends(verify_password)):
+def common_ancestor(a: str, b: str, anc_depth: int = 100, desc_depth: int = 100, _: bool = Depends(verify_password)):
     # Validate
     if a not in people or b not in people:
         raise HTTPException(status_code=404, detail="Unknown person id")
@@ -232,7 +263,7 @@ def common_ancestor(a: str, b: str, anc_depth: int = 4, desc_depth: int = 6, _: 
 
 
 @app.get("/api/common_pair")
-def common_pair(a: str, b: str, anc_depth: int = 4, desc_depth: int = 6, _: bool = Depends(verify_password)):
+def common_pair(a: str, b: str, anc_depth: int = 100, desc_depth: int = 100, _: bool = Depends(verify_password)):
     """Find lowest common ancestor person (LCA) and return that person plus their spouse (if any).
     Returns the same ancestor/descendant trees centered on the LCA person; the frontend can render the pair as a family.
     """

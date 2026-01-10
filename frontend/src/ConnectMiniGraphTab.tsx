@@ -63,7 +63,7 @@ export function ConnectMiniGraphTab({
 
     const nodes: MiniNode[] = result.path.map((step, i) => ({
       id: step.id,
-      label: nameById.get(step.id) ?? step.id,
+      label: nameById.get(step.id) ?? "unknown",
       x: i * spacingX,
       y,
     }));

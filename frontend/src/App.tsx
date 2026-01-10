@@ -60,7 +60,10 @@ export default function App() {
     return <Login onLogin={handleLogin} />;
   }
 
-  const nameById = new Map(people.map((p) => [p.id, p.name]));
+  // Helper to extract just the name (without relationship info like ", husband of X")
+  const getBaseName = (displayName: string) => displayName.split(",")[0];
+
+  const nameById = new Map(people.map((p) => [p.id, getBaseName(p.name)]));
 
   return (
     <PasswordContext.Provider value={password}>
