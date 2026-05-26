@@ -12,6 +12,7 @@
   border-radius: 6px;
   box-sizing: border-box;
   background-color: white;
+  color: #333;
   cursor: pointer;
   transition: border-color 0.2s;
 }
@@ -28,6 +29,7 @@
   left: 0;
   right: 0;
   background: white;
+  color: #333;
   border: 1px solid #ccc;
   border-radius: 6px;
   margin-top: 4px;
@@ -43,6 +45,7 @@
   padding: 10px 12px;
   cursor: pointer;
   transition: background-color 0.15s;
+  color: #333;
 }
 
 .searchable-select-option:hover {
