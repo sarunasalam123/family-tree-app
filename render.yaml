@@ -3,7 +3,7 @@ services:
     name: family-tree-api
     runtime: python
     buildCommand: pip install -r backend/requirements.txt
-    startCommand: cd backend && uvicorn app:app --host 0.0.0.0 --port $PORT
+    startCommand: bash backend/start.sh
     envVars:
       - key: PYTHON_VERSION
         value: "3.11.0"
