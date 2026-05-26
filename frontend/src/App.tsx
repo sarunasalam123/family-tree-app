@@ -133,7 +133,29 @@ export default function App() {
   return (
     <PasswordContext.Provider value={password}>
       <div style={{ width: "100%", height: "100vh", display: "flex", flexDirection: "column" }}>
-        <div style={{ display: "flex", gap: 8, padding: 12, alignItems: "center", justifyContent: "space-between", width: "100%" }}>
+        <div style={{
+          background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)",
+          padding: "14px 20px 10px",
+          textAlign: "center",
+          boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+          flexShrink: 0,
+        }}>
+          <h1 style={{
+            margin: 0,
+            fontSize: "clamp(1.2rem, 4vw, 2rem)",
+            fontFamily: "'Georgia', serif",
+            letterSpacing: "0.18em",
+            color: "#e8c97e",
+            textShadow: "0 1px 6px rgba(0,0,0,0.5)",
+            fontWeight: 700,
+          }}>
+            ✦ PROJECT AANIVER ✦
+          </h1>
+          <p style={{ margin: "2px 0 0", fontSize: "0.75rem", color: "#a0b4cc", letterSpacing: "0.12em" }}>
+            FAMILY TREE
+          </p>
+        </div>
+        <div style={{ display: "flex", gap: 8, padding: "8px 12px", alignItems: "center", justifyContent: "space-between", width: "100%", borderBottom: "1px solid #ddd", background: "#f9f9f9" }}>
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={() => setTab("tree")} style={{ fontWeight: tab === "tree" ? 800 : 400 }}>Tree</button>
             <button onClick={() => setTab("connect")} style={{ fontWeight: tab === "connect" ? 800 : 400 }}>Connect</button>
