@@ -74,12 +74,8 @@ function drawAncestryTree(opts: {
     });
   }
 
-  // Center by X
-  const minX = d3.min(root.descendants(), (d) => d.x) ?? 0;
-  const maxX = d3.max(root.descendants(), (d) => d.x) ?? 0;
-  const xRange = maxX - minX || 1;
-
-  const shiftX = translateX - (minX + xRange / 2);
+  // Anchor on the root node's x so both trees share the same vertical axis
+  const shiftX = translateX - root.x;
   const shiftY = translateY;
   group.attr("transform", `translate(${shiftX},${shiftY})`);
 
