@@ -102,8 +102,8 @@ function drawAncestryTree(opts: {
       .attr("height", BOX_H)
       .attr("rx", BOX_RX)
       .attr("fill", "white")
-      .attr("stroke", "currentColor")
-      .attr("stroke-opacity", 0.25);
+      .attr("stroke", "#333")
+      .attr("stroke-opacity", 0.4);
 
     sel
       .append("text")
@@ -231,8 +231,8 @@ function drawAncestryTree(opts: {
     .data(links)
     .join("path")
     .attr("fill", "none")
-    .attr("stroke", "currentColor")
-    .attr("stroke-opacity", (d) => (d.kind === "extra" ? 0.35 : 0.25))
+    .attr("stroke", (d) => (d.kind === "extra" ? "#888" : "#333"))
+    .attr("stroke-opacity", (d) => (d.kind === "extra" ? 0.5 : 0.6))
     .attr("stroke-width", (d) => (d.kind === "extra" ? 1.75 : 2))
     .attr("stroke-dasharray", (d) => (d.kind === "extra" ? "5 5" : null))
     .attr("d", (d) => {
@@ -541,7 +541,7 @@ export default function TreeView({ initialRootId, firstNameById }: { initialRoot
       </div>
 
       <div style={{ border: "1px solid rgba(0,0,0,0.12)", borderRadius: 16, overflow: "hidden" }}>
-        <svg ref={svgRef} style={{ width: "100%", height: "100%", background: "white" }} />
+        <svg ref={svgRef} style={{ width: "100%", height: "100%", background: "white", color: "#333", touchAction: "none" }} />
       </div>
     </div>
   );
