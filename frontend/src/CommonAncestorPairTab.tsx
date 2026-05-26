@@ -797,21 +797,7 @@ export default function CommonAncestorPairTab({
           {loading ? "Finding…" : "Find common ancestor pair"}
         </button>
 
-        <label style={{ display: "flex", gap: 8, alignItems: "center", marginLeft: "auto" }}>
-          <input 
-            type="checkbox" 
-            checked={showDuplicates} 
-            onChange={(e) => {
-              setShowDuplicates(e.target.checked);
-              if (candidates && candidates.length > 0) {
-                const c = candidates[selectedCandidate];
-                const t = buildPrunedFromDesc(c.desc.tree, c.lca, c.spouse, c.desc.extra_links || [], e.target.checked);
-                setPrunedTree(t?.[0] ?? null);
-              }
-            }}
-          />
-          Show duplicates (cousin marriage)
-        </label>
+
       </div>
 
       {error ? <div style={{ color: "crimson" }}>{error}</div> : null}

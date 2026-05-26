@@ -524,13 +524,15 @@ export default function TreeView({ initialRootId, firstNameById }: { initialRoot
           />
         </label>
 
-        <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <label
+          style={{ display: "flex", gap: 8, alignItems: "center", cursor: "default" }}
+          title={"Recommended: keep this ON. When a person appears multiple times in the tree (e.g. via cousin marriage or multiple ancestry paths), duplicates are shown so all connections are visible.\n\nTurn OFF to collapse duplicates into a single node — this lets you see how different branches of the tree connect to each other."}>
           <input
             type="checkbox"
             checked={showDuplicates}
             onChange={(e) => setShowDuplicates(e.target.checked)}
           />
-          Show duplicates (cousin marriage)
+          Show duplicates
         </label>
 
         <div style={{ opacity: 0.7, fontSize: 12 }}>Tip: scroll to zoom, drag to pan, click a person to re-center.</div>
