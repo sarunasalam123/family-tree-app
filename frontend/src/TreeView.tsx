@@ -327,7 +327,7 @@ export default function TreeView({ initialRootId, firstNameById }: { initialRoot
 
   const [ancDepth, setAncDepth] = useState<number>(4);
   const [descDepth, setDescDepth] = useState<number>(6);
-  const [showDuplicates, setShowDuplicates] = useState<boolean>(false);
+  const [showDuplicates, setShowDuplicates] = useState<boolean>(true);
 
   const [anc, setAnc] = useState<ApiResponse | null>(null);
   const [desc, setDesc] = useState<ApiResponse | null>(null);
