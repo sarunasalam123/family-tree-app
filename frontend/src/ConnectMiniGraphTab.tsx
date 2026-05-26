@@ -45,7 +45,7 @@ export function ConnectMiniGraphTab({
       return;
     }
 
-    const url = `http://localhost:8000/api/connect?a=${encodeURIComponent(
+    const url = `${import.meta.env.VITE_API_URL}/api/connect?a=${encodeURIComponent(
       aId
     )}&b=${encodeURIComponent(bId)}`;
 

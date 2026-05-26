@@ -333,7 +333,7 @@ export default function TreeView({ initialRootId, firstNameById }: { initialRoot
   const [desc, setDesc] = useState<ApiResponse | null>(null);
 
   useEffect(() => {
-    fetch("http://localhost:8000/api/people", {
+    fetch(`${import.meta.env.VITE_API_URL}/api/people`, {
       headers: { Authorization: `Bearer ${password}` },
     })
       .then((r) => r.json())
@@ -352,13 +352,13 @@ export default function TreeView({ initialRootId, firstNameById }: { initialRoot
   useEffect(() => {
     if (!rootId) return;
 
-    fetch(`http://localhost:8000/api/ancestors?root=${encodeURIComponent(rootId)}&depth=${ancDepth + 1}`, {
+    fetch(`${import.meta.env.VITE_API_URL}/api/ancestors?root=${encodeURIComponent(rootId)}&depth=${ancDepth + 1}`, {
       headers: { Authorization: `Bearer ${password}` },
     })
       .then((r) => r.json())
       .then(setAnc);
 
-    fetch(`http://localhost:8000/api/tree?root=${encodeURIComponent(rootId)}&depth=${descDepth + 1}`, {
+    fetch(`${import.meta.env.VITE_API_URL}/api/tree?root=${encodeURIComponent(rootId)}&depth=${descDepth + 1}`, {
       headers: { Authorization: `Bearer ${password}` },
     })
       .then((r) => r.json())

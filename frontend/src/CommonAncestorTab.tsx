@@ -59,7 +59,7 @@ export default function CommonAncestorTab({
     setLoading(true);
     try {
       const qs = `a=${encodeURIComponent(aId)}&b=${encodeURIComponent(bId)}`;
-      const r = await fetch(`http://localhost:8000/api/common_ancestor?${qs}`, {
+      const r = await fetch(`${import.meta.env.VITE_API_URL}/api/common_ancestor?${qs}`, {
         headers: { Authorization: `Bearer ${password}` },
       });
       if (!r.ok) throw new Error(`Request failed ${r.status}`);
@@ -427,7 +427,7 @@ export default function CommonAncestorTab({
             <div style={{ display: "flex", gap: 8 }}>
               <button onClick={() => onOpenInTree(result.lca)}>Open in Tree view</button>
               <a
-                href={`http://localhost:8000/api/person/${encodeURIComponent(result.lca)}`}
+                href={`${import.meta.env.VITE_API_URL}/api/person/${encodeURIComponent(result.lca)}`}
                 target="_blank"
                 rel="noreferrer"
               >

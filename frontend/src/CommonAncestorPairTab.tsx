@@ -488,7 +488,7 @@ export default function CommonAncestorPairTab({
     setLoading(true);
     try {
       const qs = `a=${encodeURIComponent(aId)}&b=${encodeURIComponent(bId)}`;
-      const r = await fetch(`http://localhost:8000/api/common_pair?${qs}`, {
+      const r = await fetch(`${import.meta.env.VITE_API_URL}/api/common_pair?${qs}`, {
         headers: { Authorization: `Bearer ${password}` },
       });
       if (!r.ok) throw new Error(`Request failed ${r.status}`);
@@ -851,7 +851,7 @@ export default function CommonAncestorPairTab({
                     {active.spouse ? (
                       <button onClick={() => onOpenInTree(active.spouse!)}>Open spouse in Tree view</button>
                     ) : null}
-                    <a href={`http://localhost:8000/api/person/${encodeURIComponent(active.lca)}`} target="_blank" rel="noreferrer">
+                    <a href={`${import.meta.env.VITE_API_URL}/api/person/${encodeURIComponent(active.lca)}`} target="_blank" rel="noreferrer">
                       View person JSON
                     </a>
                   </div>

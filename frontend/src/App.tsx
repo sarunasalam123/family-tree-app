@@ -51,7 +51,7 @@ export default function App() {
   useEffect(() => {
     if (!password) return;
 
-    fetch("http://localhost:8000/api/people", {
+    fetch(`${import.meta.env.VITE_API_URL}/api/people`, {
       headers: {
         Authorization: `Bearer ${password}`,
       },
