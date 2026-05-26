@@ -33,19 +33,48 @@ people, families = backend.parse_gedcom(GED_PATH)
 
 
 def clean_name(name: Any, fallback: str) -> str:
+    """Extract given name from GEDCOM parsed name tuple (given, surname, suffix)"""
     if name is None:
         return fallback
+    # ged4py parses NAME as tuple: (given_name, surname, suffix)
     if isinstance(name, (tuple, list)):
-        parts = [str(x).strip().replace("/", "") for x in name if x]
-        s = " ".join(parts).strip()
-        return s if s else fallback
-    s = str(name).replace("/", "").strip()
+        given_name = str(name[0]).strip() if name and name[0] else ""
+        return given_name if given_name else fallback
+    s = str(name).strip()
+    return s if s else fallback
+
+
+def get_full_name(name: Any, fallback: str) -> str:
+    """Extract full name in GEDCOM format (given /surname/) from parsed name tuple"""
+    if name is None:
+        return fallback
+    # ged4py parses NAME as tuple: (given_name, surname, suffix)
+    if isinstance(name, (tuple, list)):
+        given_name = str(name[0]).strip() if name and name[0] else ""
+        surname = str(name[1]).strip() if len(name) > 1 and name[1] else ""
+        
+        # Return in GEDCOM format: "FirstName /Surname/"
+        if surname:
+            return f"{given_name} /{surname}/" if given_name else f"/{surname}/"
+        return given_name if given_name else fallback
+    s = str(name).strip()
     return s if s else fallback
 
 
 def person_json(pid: str):
     p = people[pid]
-    return {"id": pid, "name": clean_name(p.name, pid), "sex": p.sex}
+    # Include spouse families (where person is husb or wife but may not be a parent)
+    spouse_fams = []
+    for fid in p.fams:
+        fam = families.get(fid)
+        if fam and ((fam.husb == pid or fam.wife == pid) and len(fam.chil) == 0):
+            # This is a family where person is a spouse but has no children in this tree
+            spouse_fams.append(fid)
+    
+    result = {"id": pid, "name": clean_name(p.name, pid), "sex": p.sex}
+    if spouse_fams:
+        result["spouse_fams"] = spouse_fams
+    return result
 def build_fam_tree(root_person_id: str, depth: int = 6):
     if root_person_id not in people:
         raise HTTPException(status_code=404, detail="Unknown person")
@@ -101,7 +130,25 @@ def build_fam_tree(root_person_id: str, depth: int = 6):
         }
 
     tree = rec_person(root_person_id, depth)
-    return {"tree": tree, "extra_links": extra_links}
+    
+    # Collect all spouse families for people in the tree (not just true leaf nodes)
+    # This allows visual leaf nodes (people filtered by depth) to also show spouses
+    spouse_families = {}
+    placed_set = placed_people | {root_person_id}
+    for pid in placed_set:
+        p = people[pid]
+        for fid in p.fams:
+            fam = families[fid]
+            # Include all family relationships for this person, not just childless ones
+            # This ensures spouses show for visual leaf nodes (filtered by depth)
+            if fid not in spouse_families:
+                spouse_families[fid] = {
+                    "id": fid,
+                    "husb": fam.husb,
+                    "wife": fam.wife,
+                }
+    
+    return {"tree": tree, "extra_links": extra_links, "spouse_families": spouse_families}
 
 def build_anc_tree(root_person_id: str, depth: int = 4):
     if root_person_id not in people:
@@ -158,7 +205,23 @@ def build_anc_tree(root_person_id: str, depth: int = 4):
         }
 
     tree = rec_person(root_person_id, depth)
-    return {"tree": tree, "extra_links": extra_links}
+    
+    # Collect all spouse families for people in the tree
+    spouse_families = {}
+    placed_set = placed_people | {root_person_id}
+    for pid in placed_set:
+        p = people[pid]
+        for fid in p.fams:
+            fam = families[fid]
+            # Include all family relationships for this person
+            if fid not in spouse_families:
+                spouse_families[fid] = {
+                    "id": fid,
+                    "husb": fam.husb,
+                    "wife": fam.wife,
+                }
+    
+    return {"tree": tree, "extra_links": extra_links, "spouse_families": spouse_families}
 
 graph = backend.build_graph(people)
 
@@ -167,51 +230,78 @@ def connect(a: str, b: str, _: bool = Depends(verify_password)):
     if a not in people or b not in people:
         raise HTTPException(status_code=404, detail="Unknown person id")
 
-    path = backend.find_relationship_path(graph, a, b)
-    if not path:
-        return {"path": [], "relationship": "no path found"}
+    paths = backend.find_relationship_path(graph, a, b)
+    if not paths:
+        return {"paths": [], "relationship": "no path found"}
 
     # Optional: reuse your existing relationship label if you want
     relationship = backend.find_relationship(people, a, b)
 
-    return {"path": path, "relationship": relationship}
+    return {"paths": paths, "relationship": relationship}
+
+def extract_last_name(name: Any) -> str:
+    """Extract last name from GEDCOM name format (First /Last/)"""
+    if name is None:
+        return ""
+    if isinstance(name, (tuple, list)):
+        # If tuple/list, check if it has a second element (last name)
+        if len(name) > 1 and name[1]:
+            return str(name[1]).strip()
+        return ""
+    s = str(name).strip()
+    # GEDCOM format: First /Last/
+    if "/" in s:
+        parts = s.split("/")
+        if len(parts) >= 2:
+            return parts[1].strip()
+    return ""
+
 @app.get("/api/people")
 def list_people(_: bool = Depends(verify_password)):
     out = []
     for pid, p in people.items():
-        name = clean_name(p.name, pid)
+        name = get_full_name(p.name, pid)
         if name.lower() != "unknown":
-            # Build display name with spouse or parent info
+            # Extract last name to check if it's empty
+            last_name = extract_last_name(p.name)
+            
+            # Build display name with spouse or parent info ONLY if last name is missing
             display_name = name
             
-            # Check if person has spouse(s) and spouse is not "unknown"
-            spouse_shown = False
-            if p.spouses:
-                # Get first spouse (assuming one primary spouse)
-                spouse_id = next(iter(p.spouses))
-                spouse_obj = people.get(spouse_id)
-                if spouse_obj:
-                    spouse_name = clean_name(spouse_obj.name, spouse_id)
-                    # Only show spouse if they're not "unknown"
-                    if spouse_name.lower() != "unknown":
-                        sex = p.sex or "unknown"
-                        if sex.lower() in ["m", "male"]:
-                            display_name = f"{name}, husband of {spouse_name}"
-                        else:
-                            display_name = f"{name}, wife of {spouse_name}"
-                        spouse_shown = True
-            
-            # If no spouse shown, use father if available
-            if not spouse_shown and p.famc:
-                fam = families.get(p.famc)
-                if fam and fam.husb:
-                    father_obj = people.get(fam.husb)
-                    if father_obj:
-                        father_name = clean_name(father_obj.name, fam.husb)
-                        display_name = f"{name}, child of {father_name}"
+            # Only show relationship context if last name is missing
+            if not last_name:
+                # Prefer parent over spouse: use father if available
+                parent_shown = False
+                if p.famc:
+                    fam = families.get(p.famc)
+                    if fam and fam.husb:
+                        father_obj = people.get(fam.husb)
+                        if father_obj:
+                            father_name = clean_name(father_obj.name, fam.husb)
+                            sex = p.sex or "unknown"
+                            if sex.lower() in ["m", "male"]:
+                                display_name = f"{name}, son of {father_name}"
+                            elif sex.lower() in ["f", "female"]:
+                                display_name = f"{name}, daughter of {father_name}"
+                            else:
+                                display_name = f"{name}, child of {father_name}"
+                            parent_shown = True
+
+                # If no parent shown, fall back to spouse
+                if not parent_shown and p.spouses:
+                    spouse_id = next(iter(p.spouses))
+                    spouse_obj = people.get(spouse_id)
+                    if spouse_obj:
+                        spouse_name = clean_name(spouse_obj.name, spouse_id)
+                        if spouse_name.lower() != "unknown":
+                            sex = p.sex or "unknown"
+                            if sex.lower() in ["m", "male"]:
+                                display_name = f"{name}, husband of {spouse_name}"
+                            else:
+                                display_name = f"{name}, wife of {spouse_name}"
             
             out.append({"id": pid, "name": display_name, "sex": p.sex})
-    out.sort(key=lambda x: x["name"])
+    out.sort(key=lambda x: int(x["id"][2:-1]) if x["id"].startswith("@I") and x["id"].endswith("@") and x["id"][2:-1].isdigit() else 0)
     return out
 @app.get("/api/ancestors")
 def get_ancestors(root: str, depth: int = 4, _: bool = Depends(verify_password)):
@@ -283,7 +373,13 @@ def common_pair(a: str, b: str, anc_depth: int = 100, desc_depth: int = 100, _: 
     seen_pairs: set[frozenset] = set()
     for x, s in sums.items():
         if s == min_sum:
-            spouse = next(iter(people[x].spouses), None)
+            # Only include spouse if they are also a common ancestor (blood relation)
+            spouse = None
+            for sp in people[x].spouses:
+                if sp in common:
+                    spouse = sp
+                    break
+            
             # canonicalize pair (unordered) to avoid duplicate pairings shown twice in reverse
             pair_key = frozenset([x, spouse]) if spouse else frozenset([x])
             if pair_key in seen_pairs:

@@ -51,12 +51,13 @@ export default function CommonAncestorPairTab({
   const [renderError, setRenderError] = useState<string | null>(null);
   const [debugOpen, setDebugOpen] = useState<boolean>(false);
   const [debugData, setDebugData] = useState<any | null>(null);
+  const [showDuplicates, setShowDuplicates] = useState<boolean>(false);
   const svgRef = useRef<SVGSVGElement | null>(null);
 
   const makePersonNode = (n: any) => ({ type: "person", id: n.id, name: n.name, sex: n.sex, children: [] as any[] });
   const makeFamilyNode = (n: any) => ({ type: "family", id: n.id, husb: n.husb, wife: n.wife, children: [] as any[] });
 
-  function buildPrunedFromDesc(descTree: any, lca: string | null, spouse: string | null, extraLinks: any[] = []) {
+  function buildPrunedFromDesc(descTree: any, lca: string | null, spouse: string | null, extraLinks: any[] = [], allowDuplicates: boolean = false) {
     if (!descTree) return [];
 
     // Inject extra_links into the live descendant tree so path discovery can traverse
@@ -161,19 +162,19 @@ export default function CommonAncestorPairTab({
           for (let i = 0; i < path.length; i++) {
             const node = path[i];
             if (node.type === "family") {
-              let f = familyMap.get(node.id);
+              let f = allowDuplicates ? null : familyMap.get(node.id);
               if (!f) {
                 f = makeFamilyNode(node);
                 parent.children.push(f);
-                familyMap.set(node.id, f);
+                if (!allowDuplicates) familyMap.set(node.id, f);
               }
               parent = f;
             } else if (node.type === "person") {
-              let p = personMap.get(node.id);
+              let p = allowDuplicates ? null : personMap.get(node.id);
               if (!p) {
                 p = makePersonNode(node);
                 parent.children.push(p);
-                personMap.set(node.id, p);
+                if (!allowDuplicates) personMap.set(node.id, p);
               } else {
                 if (!parent.children.find((c: any) => c.type === "person" && c.id === node.id)) {
                   parent.children.push(p);
@@ -459,11 +460,13 @@ export default function CommonAncestorPairTab({
           .attr("font-size", 12)
           .text((d: any) => d.name);
 
-        // initial zoom/pan: center at root family
-        if (rootFamilyPos) {
-          const initialTransform = d3.zoomIdentity.translate(width / 2 - rootFamilyPos.x, 20);
-          svg.call(zoom.transform as any, initialTransform);
-        }
+        // initial zoom/pan: center entire tree content and zoom out to fit
+        const allDescendants = root.descendants();
+        const treeMinX = d3.min(allDescendants, (d) => d.x) ?? 0;
+        const treeMaxX = d3.max(allDescendants, (d) => d.x) ?? 0;
+        const treeCenter = (treeMinX + treeMaxX) / 2;
+        const initialTransform = d3.zoomIdentity.scale(0.75).translate(width / 2 - (offsetX + treeCenter), 20);
+        svg.call(zoom.transform as any, initialTransform);
       } catch (err: any) {
         console.error(err);
         if (onError) onError(String(err));
@@ -502,7 +505,7 @@ export default function CommonAncestorPairTab({
         setPrunedTrees(null);
         setPrunedTree(null);
       } else {
-        const trees = candList.map((c: any) => buildPrunedFromDesc(c.desc.tree, c.lca, c.spouse, c.desc.extra_links || []));
+        const trees = candList.map((c: any) => buildPrunedFromDesc(c.desc.tree, c.lca, c.spouse, c.desc.extra_links || [], showDuplicates));
         setPrunedTrees(trees);
         setDebugData({ candidates: candList, prunedTrees: trees });
         setRenderError(null);
@@ -754,11 +757,13 @@ export default function CommonAncestorPairTab({
         .attr("font-size", 12)
         .text((d: any) => d.name);
 
-      // initial zoom/pan: center at root family
-      if (rootFamilyPos) {
-        const initialTransform = d3.zoomIdentity.translate(width / 2 - rootFamilyPos.x, 20);
-        svg.call(zoom.transform as any, initialTransform);
-      }
+      // initial zoom/pan: center entire tree content and zoom out to fit
+      const allDescendants = root.descendants();
+      const treeMinX = d3.min(allDescendants, (d) => d.x) ?? 0;
+      const treeMaxX = d3.max(allDescendants, (d) => d.x) ?? 0;
+      const treeCenter = (treeMinX + treeMaxX) / 2;
+      const initialTransform = d3.zoomIdentity.scale(0.75).translate(width / 2 - (offsetX + treeCenter), 20);
+      svg.call(zoom.transform as any, initialTransform);
     } catch (err: any) {
       console.error(err);
       setError(String(err));
@@ -766,8 +771,8 @@ export default function CommonAncestorPairTab({
   }, [prunedTree, nameById, onOpenInTree]);
 
   return (
-    <div style={{ display: "grid", gap: 12 }}>
-      <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 12, height: "80vh", overflow: "auto", flex: 1, width: "80vw" }}>
+      <div style={{ display: "flex", gap: 12, alignItems: "center", position: "relative", zIndex: 10 }}>
         <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           Person A
           <SearchableSelect
@@ -791,18 +796,34 @@ export default function CommonAncestorPairTab({
         <button onClick={find} disabled={!aId || !bId || aId === bId || loading}>
           {loading ? "Finding…" : "Find common ancestor pair"}
         </button>
+
+        <label style={{ display: "flex", gap: 8, alignItems: "center", marginLeft: "auto" }}>
+          <input 
+            type="checkbox" 
+            checked={showDuplicates} 
+            onChange={(e) => {
+              setShowDuplicates(e.target.checked);
+              if (candidates && candidates.length > 0) {
+                const c = candidates[selectedCandidate];
+                const t = buildPrunedFromDesc(c.desc.tree, c.lca, c.spouse, c.desc.extra_links || [], e.target.checked);
+                setPrunedTree(t?.[0] ?? null);
+              }
+            }}
+          />
+          Show duplicates (cousin marriage)
+        </label>
       </div>
 
       {error ? <div style={{ color: "crimson" }}>{error}</div> : null}
 
       {(candidates && candidates.length > 0) || result ? (
-        <div style={{ display: "grid", gap: 8 }}>
+        <div style={{ display: "grid", gap: 8, overflow: "auto", flex: 1 }}>
           {candidates && candidates.length > 1 ? (
             <div style={{ display: 'flex', gap: 8 }}>
               {candidates.map((c, i) => (
                 <button
                   key={i}
-                  onClick={() => { setSelectedCandidate(i); const t = buildPrunedFromDesc(c.desc.tree, c.lca, c.spouse, c.desc.extra_links || []); setPrunedTree(t?.[0] ?? null); }}
+                  onClick={() => { setSelectedCandidate(i); const t = buildPrunedFromDesc(c.desc.tree, c.lca, c.spouse, c.desc.extra_links || [], showDuplicates); setPrunedTree(t?.[0] ?? null); }}
                   style={{ fontWeight: i === selectedCandidate ? 800 : 400 }}
                 >
                   {nameById.get(c.lca) ?? "unknown"} {c.spouse ? `+ ${nameById.get(c.spouse) ?? "unknown"}` : ''}
@@ -849,9 +870,9 @@ export default function CommonAncestorPairTab({
         const showMultiple = (candidates && candidates.length > 1 && prunedTrees && prunedTrees.length === candidates.length && candidates.every((c: any) => c.relationship === candidates[0].relationship));
         if (showMultiple) {
           return (
-            <div style={{ display: 'flex', gap: 12, marginTop: 12 }}>
+            <div style={{ display: 'flex', gap: 12, marginTop: 12, width: '100%' }}>
               {candidates!.map((c: any, i: number) => (
-                <div key={i} style={{ border: '1px solid #ddd', borderRadius: 8, padding: 8, flex: 1 }}>
+                <div key={i} style={{ border: '1px solid #ddd', borderRadius: 8, padding: 8, flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 700, marginBottom: 6 }}>{nameById.get(c.lca) ?? "unknown"}{c.spouse ? ` + ${nameById.get(c.spouse) ?? "unknown"}` : ''}</div>
                   <div style={{ display: 'flex', gap: 8 }}>
                     {prunedTrees![i] && prunedTrees![i].length > 1 ? (
@@ -877,9 +898,9 @@ export default function CommonAncestorPairTab({
           const arr = prunedTrees[selectedCandidate] ?? [];
           if (arr.length > 1) {
             return (
-              <div style={{ display: 'flex', gap: 12, marginTop: 12 }}>
+              <div style={{ display: 'flex', gap: 12, marginTop: 12, width: '100%' }}>
                 {arr.map((t: any, i: number) => (
-                  <div key={i} style={{ border: '1px solid #ddd', borderRadius: 8, padding: 8, flex: 1 }}>
+                  <div key={i} style={{ border: '1px solid #ddd', borderRadius: 8, padding: 8, flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 700, marginBottom: 6 }}>{nameById.get(candidates[selectedCandidate].lca) ?? candidates[selectedCandidate].lca}{candidates[selectedCandidate].spouse ? ` + ${nameById.get(candidates[selectedCandidate].spouse) ?? candidates[selectedCandidate].spouse}` : ''} — Option {i + 1}</div>
                     <PrunedTreeSVG tree={t} nameById={nameById} onOpenInTree={onOpenInTree} onError={(e)=>setRenderError(e)} height={420} />
                   </div>
@@ -890,7 +911,7 @@ export default function CommonAncestorPairTab({
 
           if (arr.length === 1) {
             return (
-              <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 8, marginTop: 12 }}>
+              <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 8, marginTop: 12, width: '100%' }}>
                 <PrunedTreeSVG tree={arr[0]} nameById={nameById} onOpenInTree={onOpenInTree} onError={(e)=>setRenderError(e)} height={480} />
               </div>
             );

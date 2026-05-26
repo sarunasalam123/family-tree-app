@@ -11,6 +11,9 @@ type SearchableSelectProps = {
   placeholder?: string;
 };
 
+// Helper to strip GEDCOM / delimiters for display
+const cleanNameForDisplay = (name: string) => name.replace(/\//g, "");
+
 export function SearchableSelect({
   options,
   value,
@@ -89,6 +92,10 @@ export function SearchableSelect({
     setSearchTerm("");
     setIsOpen(false);
     setHighlightedIndex(0);
+    // Blur the input to prevent re-opening on focus
+    if (inputRef.current) {
+      inputRef.current.blur();
+    }
   }
 
   return (
@@ -98,15 +105,17 @@ export function SearchableSelect({
         type="text"
         className="searchable-select-input"
         placeholder={selectedOption ? "" : placeholder}
-        value={isOpen ? searchTerm : selectedOption?.name || ""}
+        value={isOpen ? searchTerm : cleanNameForDisplay(selectedOption?.name || "")}
         onChange={(e) => {
           setSearchTerm(e.target.value);
           setIsOpen(true);
           setHighlightedIndex(0);
         }}
         onFocus={() => {
-          setIsOpen(true);
-          setSearchTerm("");
+          if (!isOpen) {
+            setIsOpen(true);
+            setSearchTerm("");
+          }
         }}
       />
       {isOpen && (
@@ -118,9 +127,13 @@ export function SearchableSelect({
                 className={`searchable-select-option ${
                   idx === highlightedIndex ? "highlighted" : ""
                 } ${opt.id === value ? "selected" : ""}`}
-                onClick={() => handleSelect(opt.id)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleSelect(opt.id);
+                }}
               >
-                {opt.name}
+                {cleanNameForDisplay(opt.name)}
               </li>
             ))
           ) : (

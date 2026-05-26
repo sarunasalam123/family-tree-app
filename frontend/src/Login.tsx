@@ -3,11 +3,14 @@ import "./Login.css";
 
 type LoginProps = {
   onLogin: (password: string) => void;
+  error?: string | null;
 };
 
-export function Login({ onLogin }: LoginProps) {
+export function Login({ onLogin, error: externalError }: LoginProps) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+
+  const displayError = error || externalError;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,7 +37,7 @@ export function Login({ onLogin }: LoginProps) {
             autoFocus
           />
           <button type="submit">Login</button>
-          {error && <div className="error">{error}</div>}
+          {displayError && <div className="error">{displayError}</div>}
         </form>
       </div>
     </div>

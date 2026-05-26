@@ -204,43 +204,56 @@ def find_relationship(people, pid1, pid2):
 
 def find_relationship_path(graph, start_id: str, end_id: str):
     """
-    Returns the shortest path from start_id -> end_id as a list of steps:
+    Returns all shortest paths from start_id -> end_id as a list of path lists:
     [
-      {"id": "@I1@", "via": None},
-      {"id": "@I3@", "via": "parent"},
-      ...
+      [
+        {"id": "@I1@", "via": None},
+        {"id": "@I3@", "via": "parent"},
+        ...
+      ],
+      [
+        {"id": "@I1@", "via": None},
+        {"id": "@I4@", "via": "parent"},
+        ...
+      ]
     ]
     """
     if start_id == end_id:
-        return [{"id": start_id, "via": None}]
+        return [[{"id": start_id, "via": None}]]
 
     q = deque([start_id])
-    prev = {start_id: (None, None)}  # node -> (prev_node, edge_label)
+    prev = {start_id: [(None, None)]}  # node -> list of (prev_node, edge_label) tuples
+    distance = {start_id: 0}
 
     while q:
         cur = q.popleft()
         for nxt, label in graph.get(cur, []):
-            if nxt in prev:
-                continue
-            prev[nxt] = (cur, label)
-            if nxt == end_id:
-                q.clear()
-                break
-            q.append(nxt)
+            if nxt not in distance:
+                distance[nxt] = distance[cur] + 1
+                prev[nxt] = [(cur, label)]
+                q.append(nxt)
+            elif distance[nxt] == distance[cur] + 1:
+                # Same distance - add this as another predecessor
+                prev[nxt].append((cur, label))
 
     if end_id not in prev:
         return []
 
-    # Reconstruct
-    out = []
-    node = end_id
-    while node is not None:
-        p, via = prev[node]
-        out.append({"id": node, "via": via})
-        node = p
-    out.reverse()
-    out[0]["via"] = None
-    return out
+    # Reconstruct all paths using DFS
+    def reconstruct_paths(node):
+        if node == start_id:
+            return [[{"id": node, "via": None}]]
+        
+        all_paths = []
+        for prev_node, via in prev.get(node, []):
+            if prev_node is None:
+                continue
+            for path in reconstruct_paths(prev_node):
+                new_path = path + [{"id": node, "via": via}]
+                all_paths.append(new_path)
+        return all_paths
+
+    return reconstruct_paths(end_id)
 
 
 

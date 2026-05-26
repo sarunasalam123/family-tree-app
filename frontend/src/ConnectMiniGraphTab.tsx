@@ -6,7 +6,7 @@ import { SearchableSelect } from "./SearchableSelect";
 type PersonLite = { id: string; name: string };
 
 type ConnectStep = { id: string; via: string | null };
-type ConnectResult = { relationship?: string; path: ConnectStep[] };
+type ConnectResult = { relationship?: string; paths: ConnectStep[][] };
 
 type MiniNode = { id: string; label: string; x: number; y: number };
 type MiniLink = { source: string; target: string; label?: string | null };
@@ -58,7 +58,7 @@ export function ConnectMiniGraphTab({
     }
     const data = (await r.json()) as ConnectResult;
 
-    if (!data.path || data.path.length === 0) {
+    if (!data.paths || data.paths.length === 0) {
       setError("No connection found.");
       return;
     }
@@ -67,33 +67,50 @@ export function ConnectMiniGraphTab({
   }
 
   const graph = useMemo(() => {
-    if (!result?.path?.length) return null;
+    if (!result?.paths?.length) return null;
 
-    // Layout nodes in a simple left-to-right line; it looks good for shortest paths.
+    // Display all paths stacked vertically
     const spacingX = 220;
-    const y = 120;
+    const pathSpacingY = 150; // Vertical spacing between different paths
+    const startY = 60;
 
-    const nodes: MiniNode[] = result.path.map((step, i) => ({
-      id: step.id,
-      label: nameById.get(step.id) ?? "unknown",
-      x: i * spacingX,
-      y,
-    }));
-
+    const nodes: MiniNode[] = [];
     const links: MiniLink[] = [];
-    for (let i = 0; i < result.path.length - 1; i++) {
-      links.push({
-        source: result.path[i].id,
-        target: result.path[i + 1].id,
-        label: result.path[i + 1].via ?? undefined, // edge label stored on the "to" node
-      });
+    let pathIndex = 0;
+
+    for (const path of result.paths) {
+      const y = startY + pathIndex * pathSpacingY;
+
+      for (let i = 0; i < path.length; i++) {
+        const step = path[i];
+        // Create unique node ID by combining person ID and path index
+        const nodeKey = `${step.id}_path${pathIndex}`;
+        
+        nodes.push({
+          id: nodeKey,
+          label: nameById.get(step.id) ?? "unknown",
+          x: i * spacingX,
+          y,
+        });
+
+        // Add links between consecutive steps in this path
+        if (i > 0) {
+          links.push({
+            source: `${path[i - 1].id}_path${pathIndex}`,
+            target: nodeKey,
+            label: step.via ?? undefined,
+          });
+        }
+      }
+
+      pathIndex++;
     }
 
     return { nodes, links };
   }, [result, nameById]);
 
   return (
-    <div style={{ display: "grid", gap: 10 }}>
+    <div style={{ display: "grid", gridTemplateRows: "auto 1fr", gap: 10, height: "80vh", width: "80vw", padding: 16 }}>
       <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
         <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           Person A{" "}
@@ -133,7 +150,9 @@ export function ConnectMiniGraphTab({
           border: "1px solid #ddd",
           borderRadius: 12,
           padding: 8,
-          height: 320,
+          width: "100%",
+          height: "100%",
+          overflow: "auto",
         }}
       >
         {graph ? <MiniGraph graph={graph} /> : <div style={{ opacity: 0.6 }}>Select two people to see the mini graph.</div>}

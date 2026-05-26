@@ -12,7 +12,7 @@ type ApiNode =
 
 type ExtraLink = { from_fam: string; to_person: string };
 
-type ApiResponse = { tree: ApiNode; extra_links: ExtraLink[] };
+type ApiResponse = { tree: ApiNode; extra_links: ExtraLink[]; spouse_families?: { [key: string]: { id: string; husb?: string | null; wife?: string | null } } };
 
 type Link = { from?: string; to?: string; kind: string; sx?: number; sy?: number; tx?: number; ty?: number };
 
@@ -20,31 +20,51 @@ function drawAncestryTree(opts: {
   g: d3.Selection<SVGGElement, unknown, null, undefined>;
   rootNode: ApiNode;
   extraLinks?: ExtraLink[];
+  spouse_families?: { [key: string]: { id: string; husb?: string | null; wife?: string | null } };
   nameById: Map<string, string>;
+  displayNameById?: Map<string, string>;
   translateX: number;
   translateY: number;
   direction: "up" | "down";
   onPersonClick: (id: string) => void;
   skipRootPersonBox?: boolean;
   connectTo?: { x: number; y: number };
+  showDuplicates?: boolean;
 }) {
   const {
     g,
     rootNode,
     extraLinks = [],
+    spouse_families = {},
     nameById,
+    displayNameById,
     translateX,
     translateY,
     direction,
     onPersonClick,
     skipRootPersonBox,
     connectTo,
+    showDuplicates = false,
   } = opts;
 
   const group = g.append("g").attr("transform", `translate(${translateX},${translateY})`);
 
+  // Sizing (used for edge targeting and layout)
+  const SPOUSE_OFFSET_X = 220;
+  const BOX_W = 240;
+  const BOX_H = 50;
+  const BOX_RX = 12;
+  const TRUNK_H = 28;
+
   const root = d3.hierarchy<ApiNode>(rootNode as any, (d) => d.children ?? []);
-  const layout = d3.tree<ApiNode>().nodeSize([240, 150]);
+  
+  const personNodes = root.descendants().filter((d) => d.data.type === "person");
+
+  // Increase horizontal spacing if spouse boxes will be displayed
+  const nodeSpacing = 300;
+  // Double vertical spacing for descendants tree, keep normal for ancestors
+  const verticalSpacing = direction === "down" ? 150 : 75;
+  const layout = d3.tree<ApiNode>().nodeSize([nodeSpacing, verticalSpacing]);
   layout(root);
 
   // Flip ancestors upward
@@ -65,13 +85,6 @@ function drawAncestryTree(opts: {
 
   const pos = new Map<string, { x: number; y: number; data: ApiNode }>();
   root.descendants().forEach((d) => pos.set(`${d.data.type}:${d.data.id}`, { x: d.x, y: d.y, data: d.data }));
-
-  // Sizing (used for edge targeting)
-  const SPOUSE_OFFSET_X = 140;
-  const BOX_W = 180;
-  const BOX_H = 34;
-  const BOX_RX = 12;
-  const TRUNK_H = 28;
 
   const rootPersonId = rootNode.type === "person" ? rootNode.id : "";
   const rootLocal = pos.get(`person:${rootPersonId}`) ?? null;
@@ -96,11 +109,11 @@ function drawAncestryTree(opts: {
       .append("text")
       .attr("text-anchor", "middle")
       .attr("dominant-baseline", "middle")
-      .attr("font-size", 12)
+      .attr("font-size", 16)
       .text(label);
   }
 
-  const spouseBoxes: { pid: string; name: string; x: number; y: number }[] = [];
+  const spouseBoxes: { pid: string; name: string; x: number; y: number; forceLocal?: boolean }[] = [];
   const junctions: { fid: string; x: number; y: number }[] = [];
   const links: Link[] = [];
 
@@ -108,11 +121,10 @@ function drawAncestryTree(opts: {
   root.descendants().forEach((d) => {
     if (d.data.type !== "family") return;
 
-    const familyPos = pos.get(`family:${d.data.id}`);
-    if (!familyPos) return;
-
-    const jx = familyPos.x;
-    const jy = familyPos.y;
+    // Use the d3 node's own coordinates directly — avoids stale pos-map values
+    // when duplicate person nodes have been injected (showDuplicates mode).
+    const jx = d.x;
+    const jy = d.y;
 
     junctions.push({ fid: d.data.id, x: jx, y: jy });
 
@@ -120,19 +132,43 @@ function drawAncestryTree(opts: {
     const wifeId = d.data.wife ?? null;
 
     if (husbId) {
-      const ppos = pos.get(`person:${husbId}`);
-      const ax = ppos ? ppos.x : jx - SPOUSE_OFFSET_X;
-      const ay = ppos ? ppos.y : jy;
-      if (!ppos) spouseBoxes.push({ pid: husbId, name: nameById.get(husbId) ?? "unknown", x: ax, y: ay });
-      links.push({ sx: ax, sy: ay, tx: jx, ty: jy, kind: "normal" });
+      const husbChild = (d.children ?? []).find((c) => c.data.type === "person" && c.data.id === husbId);
+      const ownerIsHusb = d.parent?.data.type === "person" && d.parent.data.id === husbId;
+      const useLocalHusb = showDuplicates && direction === "down" && !ownerIsHusb && pos.has(`person:${husbId}`);
+      // If the husband IS the parent node, use d.parent's coordinates directly (avoids pos-map collision with duplicates)
+      const hpos = husbChild
+        ? { x: husbChild.x, y: husbChild.y }
+        : ownerIsHusb && d.parent
+        ? { x: d.parent.x, y: d.parent.y }
+        : useLocalHusb
+        ? null
+        : pos.get(`person:${husbId}`);
+      const hx = hpos ? hpos.x : jx - SPOUSE_OFFSET_X;
+      const hy = hpos ? hpos.y : jy;
+      if (!hpos) {
+        spouseBoxes.push({ pid: husbId, name: displayNameById?.get(husbId) ?? nameById.get(husbId) ?? "unknown", x: hx, y: hy, forceLocal: useLocalHusb });
+      }
+      links.push({ sx: hx, sy: hy, tx: jx, ty: jy, kind: "normal" });
     }
 
     if (wifeId) {
-      const ppos = pos.get(`person:${wifeId}`);
-      const ax = ppos ? ppos.x : jx + SPOUSE_OFFSET_X;
-      const ay = ppos ? ppos.y : jy;
-      if (!ppos) spouseBoxes.push({ pid: wifeId, name: nameById.get(wifeId) ?? "unknown", x: ax, y: ay });
-      links.push({ sx: ax, sy: ay, tx: jx, ty: jy, kind: "normal" });
+      const wifeChild = (d.children ?? []).find((c) => c.data.type === "person" && c.data.id === wifeId);
+      const ownerIsWife = d.parent?.data.type === "person" && d.parent.data.id === wifeId;
+      const useLocalWife = showDuplicates && direction === "down" && !ownerIsWife && pos.has(`person:${wifeId}`);
+      // If the wife IS the parent node, use d.parent's coordinates directly
+      const wpos = wifeChild
+        ? { x: wifeChild.x, y: wifeChild.y }
+        : ownerIsWife && d.parent
+        ? { x: d.parent.x, y: d.parent.y }
+        : useLocalWife
+        ? null
+        : pos.get(`person:${wifeId}`);
+      const wx = wpos ? wpos.x : jx + SPOUSE_OFFSET_X;
+      const wy = wpos ? wpos.y : jy;
+      if (!wpos) {
+        spouseBoxes.push({ pid: wifeId, name: displayNameById?.get(wifeId) ?? nameById.get(wifeId) ?? "unknown", x: wx, y: wy, forceLocal: useLocalWife });
+      }
+      links.push({ sx: wx, sy: wy, tx: jx, ty: jy, kind: "normal" });
     }
 
     if (direction === "down") {
@@ -143,10 +179,8 @@ function drawAncestryTree(opts: {
 
       (d.children ?? []).forEach((child) => {
         if (child.data.type !== "person") return;
-        const cpos = pos.get(`person:${child.data.id}`);
-        if (!cpos) return;
-
-        links.push({ sx: trunkEndX, sy: trunkEndY, tx: cpos.x, ty: cpos.y - BOX_H / 2, kind: "normal" });
+        // Use d3 node's own position — correct even for duplicate-injected nodes
+        links.push({ sx: trunkEndX, sy: trunkEndY, tx: child.x, ty: child.y - BOX_H / 2, kind: "normal" });
       });
     } else {
       // Ancestors: parents-junction -> the child-person that owns this family (d.parent)
@@ -158,15 +192,37 @@ function drawAncestryTree(opts: {
           const targetLocal = { x: connectTo.x - shiftX, y: connectTo.y - shiftY };
           links.push({ sx: jx, sy: jy, tx: targetLocal.x, ty: targetLocal.y, kind: "normal" });
         } else {
-          const cpos = pos.get(`person:${childId}`);
-          if (cpos) {
-            links.push({ sx: jx, sy: jy, tx: cpos.x, ty: cpos.y + BOX_H / 2, kind: "normal" });
-          }
+            links.push({ sx: jx, sy: jy, tx: childPerson.x, ty: childPerson.y + BOX_H / 2, kind: "normal" });
         }
       }
     }
   });
 
+  // Process leaf spouse families: render spouses as boxes beside each leaf node.
+  // Iterate over actual d3 person nodes (not IDs) so duplicate injected nodes each
+  // get their own spouse box at their own position.
+  const leafSpouseBoxIndices = new Set<number>();
+  if (direction === "down") {
+    personNodes.forEach((d) => {
+      // A leaf is a person node with no children in the d3 hierarchy
+      if (d.children && d.children.length > 0) return;
+      const personId = d.data.id;
+      Object.values(spouse_families).forEach((fam) => {
+        const husbId = fam.husb ?? null;
+        const wifeId = fam.wife ?? null;
+        let spouseId: string | null = null;
+        if (husbId === personId) spouseId = wifeId;
+        else if (wifeId === personId) spouseId = husbId;
+        if (!spouseId) return;
+        // Place spouse box below-right of this specific leaf occurrence
+        const spouseX = d.x + 20;
+        const spouseY = d.y + BOX_H / 2 + 15;
+        const boxIndex = spouseBoxes.length;
+        spouseBoxes.push({ pid: spouseId, name: displayNameById?.get(spouseId) ?? nameById.get(spouseId) ?? "unknown", x: spouseX, y: spouseY });
+        leafSpouseBoxIndices.add(boxIndex);
+      });
+    });
+  }
 
   // Links
   group
@@ -187,7 +243,6 @@ function drawAncestryTree(opts: {
     });
 
   // Person nodes
-  const personNodes = root.descendants().filter((d) => d.data.type === "person");
   const filteredPersonNodes =
     skipRootPersonBox && rootPersonId ? personNodes.filter((d) => d.data.id !== rootPersonId) : personNodes;
 
@@ -201,12 +256,18 @@ function drawAncestryTree(opts: {
     .on("click", (_, d) => onPersonClick(d.data.id));
 
   pn.each(function (d) {
-    drawPersonBox(d3.select(this) as any, d.data.name);
+    const displayName = displayNameById?.get(d.data.id) ?? d.data.name;
+    drawPersonBox(d3.select(this) as any, displayName);
   });
 
-  // Spouse boxes only when spouse person isn't in this subtree
-  const inTreePersons = new Set(personNodes.map((d) => d.data.id));
-  const filteredSpouses = spouseBoxes.filter((s) => !inTreePersons.has(s.pid));
+  // Spouse boxes only when spouse person isn't in this subtree (use filteredPersonNodes to account for root person filtering)
+  const inTreePersons = new Set(filteredPersonNodes.map((d) => d.data.id));
+  // Keep spouses not in tree, plus all leaf spouse boxes (even if they appear multiple times)
+  const filteredSpouses = spouseBoxes.filter((s, index) => {
+    if (leafSpouseBoxIndices.has(index)) return true;
+    if (s.forceLocal) return true;
+    return !inTreePersons.has(s.pid);
+  });
 
   const sn = group
     .append("g")
@@ -218,7 +279,8 @@ function drawAncestryTree(opts: {
     .on("click", (_, d) => onPersonClick(d.pid));
 
   sn.each(function (d) {
-    drawPersonBox(d3.select(this) as any, d.name);
+    const displayName = displayNameById?.get(d.pid) ?? d.name;
+    drawPersonBox(d3.select(this) as any, displayName);
   });
 
   // Junction dots
@@ -256,7 +318,7 @@ function drawAncestryTree(opts: {
   return { rootBox };
 }
 
-export default function TreeView({ initialRootId }: { initialRootId?: string } = {}) {
+export default function TreeView({ initialRootId, firstNameById }: { initialRootId?: string; firstNameById?: Map<string, string> } = {}) {
   const password = usePassword();
   const svgRef = useRef<SVGSVGElement | null>(null);
 
@@ -265,6 +327,7 @@ export default function TreeView({ initialRootId }: { initialRootId?: string } =
 
   const [ancDepth, setAncDepth] = useState<number>(4);
   const [descDepth, setDescDepth] = useState<number>(6);
+  const [showDuplicates, setShowDuplicates] = useState<boolean>(false);
 
   const [anc, setAnc] = useState<ApiResponse | null>(null);
   const [desc, setDesc] = useState<ApiResponse | null>(null);
@@ -302,6 +365,60 @@ export default function TreeView({ initialRootId }: { initialRootId?: string } =
       .then(setDesc);
   }, [rootId, ancDepth, descDepth, password]);
 
+  // Inject duplicate person nodes into families referenced by extra_links so the
+  // tree has a stable shape without cross-link dashes (used when showDuplicates=true).
+  function injectDuplicates(tree: ApiNode, extraLinks: ExtraLink[], nameById: Map<string, string>, direction: "up" | "down"): ApiNode {
+    const cloned: ApiNode = JSON.parse(JSON.stringify(tree));
+
+    function findPerson(node: ApiNode, id: string): ApiNode | null {
+      if (node.type === "person" && node.id === id) return node;
+      for (const ch of (node.children ?? [])) {
+        const f = findPerson(ch, id);
+        if (f) return f;
+      }
+      return null;
+    }
+
+    function inject(node: ApiNode, fromFam: string, person: ApiNode): void {
+      if (node.type === "family" && node.id === fromFam) {
+        if (!node.children) node.children = [];
+        const exists = node.children.some((ch) => ch.type === "person" && ch.id === person.id);
+        if (!exists) {
+          const dup: any = JSON.parse(JSON.stringify(person));
+          node.children.push(dup);
+          // For ancestor trees the injected person is a parent (husb/wife) of the family —
+          // update those fields so the junction→person link is drawn by the spouse-box code.
+          // For descendant trees the injected person is a child, so leave husb/wife alone;
+          // the trunk→child link is drawn by iterating d.children directly.
+          if (direction === "up" && person.type === "person") {
+            const fam = node as any;
+            const sex = (person as any).sex;
+            if (sex === "M" || (!fam.husb && sex !== "F")) {
+              fam.husb = person.id;
+            } else {
+              fam.wife = person.id;
+            }
+          }
+        }
+        // Continue traversal — catch ALL occurrences of this family id in the tree
+      }
+      for (const ch of (node.children ?? [])) {
+        inject(ch, fromFam, person);
+      }
+    }
+
+    for (const link of extraLinks) {
+      const personNode = findPerson(cloned, link.to_person) ?? {
+        type: "person" as const,
+        id: link.to_person,
+        name: nameById.get(link.to_person) ?? "unknown",
+        children: [],
+      };
+      inject(cloned, link.from_fam, personNode);
+    }
+    return cloned;
+  }
+
   useEffect(() => {
     if (!svgRef.current || !anc || !desc) return;
 
@@ -317,45 +434,71 @@ export default function TreeView({ initialRootId }: { initialRootId?: string } =
 
     const g = svg.append("g");
 
-    svg.call(
-      d3
-        .zoom<SVGSVGElement, unknown>()
-        .scaleExtent([0.25, 2.5])
-        .on("zoom", (event) => g.attr("transform", event.transform))
-    );
+    // Set up zoom behavior
+    const zoomBehavior = d3
+      .zoom<SVGSVGElement, unknown>()
+      .scaleExtent([0.25, 2.5])
+      .on("zoom", (event) => g.attr("transform", event.transform));
+
+    svg.call(zoomBehavior);
 
     const centerX = width / 2;
     const centerY = height / 2;
 
+    const descTree = showDuplicates ? injectDuplicates(desc.tree, desc.extra_links ?? [], nameById, "down") : desc.tree;
+    const descExtraLinks = showDuplicates ? [] : (desc.extra_links ?? []);
+    const ancTree = showDuplicates ? injectDuplicates(anc.tree, anc.extra_links ?? [], nameById, "up") : anc.tree;
+    const ancExtraLinks = showDuplicates ? [] : (anc.extra_links ?? []);
+
     // Descendants first
     const descResult = drawAncestryTree({
       g,
-      rootNode: desc.tree,
-      extraLinks: desc.extra_links,
+      rootNode: descTree,
+      extraLinks: descExtraLinks,
+      spouse_families: desc.spouse_families,
       nameById,
+      displayNameById: firstNameById,
       translateX: centerX,
       translateY: centerY + 40,
       direction: "down",
       onPersonClick: setRootId,
+      showDuplicates,
     });
 
     // Ancestors, connect to descendant root edge
     drawAncestryTree({
       g,
-      rootNode: anc.tree,
-      extraLinks: anc.extra_links,
+      rootNode: ancTree,
+      extraLinks: ancExtraLinks,
+      spouse_families: anc.spouse_families,
       nameById,
+      displayNameById: firstNameById,
       translateX: centerX,
       translateY: centerY - 40,
       direction: "up",
       onPersonClick: setRootId,
       skipRootPersonBox: true,
       connectTo: descResult.rootBox?.top ?? undefined,
+      showDuplicates,
     });
-  }, [people, anc, desc]);
+
+    // Center on the root person
+    if (descResult.rootBox) {
+      const rootScreenX = descResult.rootBox.center.x;
+      const rootScreenY = descResult.rootBox.center.y;
+      
+      // Calculate transform to center the root person in the viewport
+      const scale = 1;
+      const tx = width / 2 - rootScreenX * scale;
+      const ty = height / 2 - rootScreenY * scale;
+      
+      const transform = d3.zoomIdentity.translate(tx, ty).scale(scale);
+      svg.call(zoomBehavior.transform, transform);
+    }
+  }, [people, anc, desc, firstNameById, showDuplicates]);
 
   return (
-    <div style={{ display: "grid", gridTemplateRows: "auto 1fr", gap: 12, height: "100vh", padding: 16 }}>
+    <div style={{ display: "grid", gridTemplateRows: "auto 1fr", gap: 12, height: "80vh", width: "80vw", padding: 16 }}>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "center" }}>
         <div style={{ fontWeight: 800, fontSize: 18 }}>Family Tree</div>
 
@@ -383,6 +526,15 @@ export default function TreeView({ initialRootId }: { initialRootId?: string } =
             value={descDepth}
             onChange={(e) => setDescDepth(Number(e.target.value))}
           />
+        </label>
+
+        <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <input
+            type="checkbox"
+            checked={showDuplicates}
+            onChange={(e) => setShowDuplicates(e.target.checked)}
+          />
+          Show duplicates (cousin marriage)
         </label>
 
         <div style={{ opacity: 0.7, fontSize: 12 }}>Tip: scroll to zoom, drag to pan, click a person to re-center.</div>
