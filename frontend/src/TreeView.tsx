@@ -369,23 +369,6 @@ function drawAncestryTree(opts: {
   const filteredPersonNodes =
     skipRootPersonBox && rootPersonId ? personNodes.filter((d) => d.data.id !== rootPersonId) : personNodes;
 
-  const pn = group
-    .append("g")
-    .selectAll("g.person")
-    .data(filteredPersonNodes)
-    .join("g")
-    .attr("class", "person")
-    .attr("data-nkey", (d) => `person:${d.data.id}`)
-    .attr("data-scalable", "1")
-    .attr("transform", (d) => `translate(${d.x},${d.y})`)
-    .style("cursor", "pointer")
-    .on("click", (_, d) => onPersonClick(d.data.id));
-
-  pn.each(function (d) {
-    const displayName = displayNameById?.get(d.data.id) ?? d.data.name;
-    drawPersonBox(d3.select(this) as any, displayName);
-  });
-
   // Spouse boxes only when spouse person isn't in this subtree (use filteredPersonNodes to account for root person filtering)
   const inTreePersons = new Set(filteredPersonNodes.map((d) => d.data.id));
   // Keep spouses not in tree, plus all leaf spouse boxes (even if they appear multiple times)
@@ -395,6 +378,7 @@ function drawAncestryTree(opts: {
     return !inTreePersons.has(s.pid);
   });
 
+  // Render spouse group FIRST so person nodes paint on top (spouse covered by person when overlapping)
   const sn = group
     .append("g")
     .selectAll("g.spouse")
@@ -409,6 +393,23 @@ function drawAncestryTree(opts: {
 
   sn.each(function (d) {
     const displayName = displayNameById?.get(d.pid) ?? d.name;
+    drawPersonBox(d3.select(this) as any, displayName);
+  });
+
+  const pn = group
+    .append("g")
+    .selectAll("g.person")
+    .data(filteredPersonNodes)
+    .join("g")
+    .attr("class", "person")
+    .attr("data-nkey", (d) => `person:${d.data.id}`)
+    .attr("data-scalable", "1")
+    .attr("transform", (d) => `translate(${d.x},${d.y})`)
+    .style("cursor", "pointer")
+    .on("click", (_, d) => onPersonClick(d.data.id));
+
+  pn.each(function (d) {
+    const displayName = displayNameById?.get(d.data.id) ?? d.data.name;
     drawPersonBox(d3.select(this) as any, displayName);
   });
 
