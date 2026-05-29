@@ -457,8 +457,8 @@ export default function TreeView({ initialRootId, firstNameById }: { initialRoot
   const [people, setPeople] = useState<PersonLite[]>([]);
   const [rootId, setRootId] = useState<string>(initialRootId ?? "");
 
-  const [ancDepth, setAncDepth] = useState<number>(4);
-  const [descDepth, setDescDepth] = useState<number>(6);
+  const [ancDepth, setAncDepth] = useState<number>(3);
+  const [descDepth, setDescDepth] = useState<number>(3);
   const [showDuplicates, setShowDuplicates] = useState<boolean>(true);
 
   const [anc, setAnc] = useState<ApiResponse | null>(null);
