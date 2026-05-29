@@ -230,7 +230,7 @@ def build_anc_tree(root_person_id: str, depth: int = 4):
     
     return {"tree": tree, "extra_links": extra_links, "spouse_families": spouse_families}
 
-graph = backend.build_graph(people)
+graph = backend.build_graph(people, families)
 
 @app.get("/api/connect")
 def connect(a: str, b: str, _: bool = Depends(verify_password)):
