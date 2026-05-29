@@ -1,5 +1,5 @@
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import * as d3 from "d3";
 import { usePassword } from "./App";
 import { SearchableSelect } from "./SearchableSelect";
@@ -369,22 +369,6 @@ function drawAncestryTree(opts: {
   const filteredPersonNodes =
     skipRootPersonBox && rootPersonId ? personNodes.filter((d) => d.data.id !== rootPersonId) : personNodes;
 
-  const pn = group
-    .append("g")
-    .selectAll("g.person")
-    .data(filteredPersonNodes)
-    .join("g")
-    .attr("class", "person")
-    .attr("data-nkey", (d) => `person:${d.data.id}`)
-    .attr("transform", (d) => `translate(${d.x},${d.y})`)
-    .style("cursor", "pointer")
-    .on("click", (_, d) => onPersonClick(d.data.id));
-
-  pn.each(function (d) {
-    const displayName = displayNameById?.get(d.data.id) ?? d.data.name;
-    drawPersonBox(d3.select(this) as any, displayName);
-  });
-
   // Spouse boxes only when spouse person isn't in this subtree (use filteredPersonNodes to account for root person filtering)
   const inTreePersons = new Set(filteredPersonNodes.map((d) => d.data.id));
   // Keep spouses not in tree, plus all leaf spouse boxes (even if they appear multiple times)
@@ -394,6 +378,7 @@ function drawAncestryTree(opts: {
     return !inTreePersons.has(s.pid);
   });
 
+  // Render spouse group FIRST so person nodes paint on top (spouse covered by person when overlapping)
   const sn = group
     .append("g")
     .selectAll("g.spouse")
@@ -401,12 +386,30 @@ function drawAncestryTree(opts: {
     .join("g")
     .attr("class", "spouse")
     .attr("data-nkey", (d) => `person:${d.pid}`)
+    .attr("data-scalable", "1")
     .attr("transform", (d) => `translate(${d.x},${d.y})`)
     .style("cursor", "pointer")
     .on("click", (_, d) => onPersonClick(d.pid));
 
   sn.each(function (d) {
     const displayName = displayNameById?.get(d.pid) ?? d.name;
+    drawPersonBox(d3.select(this) as any, displayName);
+  });
+
+  const pn = group
+    .append("g")
+    .selectAll("g.person")
+    .data(filteredPersonNodes)
+    .join("g")
+    .attr("class", "person")
+    .attr("data-nkey", (d) => `person:${d.data.id}`)
+    .attr("data-scalable", "1")
+    .attr("transform", (d) => `translate(${d.x},${d.y})`)
+    .style("cursor", "pointer")
+    .on("click", (_, d) => onPersonClick(d.data.id));
+
+  pn.each(function (d) {
+    const displayName = displayNameById?.get(d.data.id) ?? d.data.name;
     drawPersonBox(d3.select(this) as any, displayName);
   });
 
@@ -417,6 +420,7 @@ function drawAncestryTree(opts: {
     .data(junctions)
     .join("circle")
     .attr("class", "junction")
+    .attr("data-scalable", "1")
     .attr("cx", (d) => d.x)
     .attr("cy", (d) => d.y)
     .attr("r", 4)
@@ -453,12 +457,140 @@ export default function TreeView({ initialRootId, firstNameById }: { initialRoot
   const [people, setPeople] = useState<PersonLite[]>([]);
   const [rootId, setRootId] = useState<string>(initialRootId ?? "");
 
-  const [ancDepth, setAncDepth] = useState<number>(6);
+  const [ancDepth, setAncDepth] = useState<number>(3);
   const [descDepth, setDescDepth] = useState<number>(3);
   const [showDuplicates, setShowDuplicates] = useState<boolean>(true);
 
   const [anc, setAnc] = useState<ApiResponse | null>(null);
   const [desc, setDesc] = useState<ApiResponse | null>(null);
+
+  // Build a flat name lookup for use in the relatives panel
+  const nameById = useMemo(() => new Map(people.map((p) => [p.id, p.name.split(",")[0]])), [people]);
+
+  // Categorise people visible in the current tree by their relationship to rootId
+  const relativeCategories = useMemo(() => {
+    if (!anc || !desc || !rootId) return [];
+    type Entry = { id: string; name: string };
+    type Category = { label: string; people: Entry[] };
+    const categories: Category[] = [];
+
+    const display = (id: string) => firstNameById?.get(id) ?? nameById.get(id) ?? id;
+    // Return null for people with no real name (raw GEDCOM id or blank)
+    const displayOrNull = (id: string): string | null => {
+      const n = firstNameById?.get(id) ?? nameById.get(id);
+      if (!n || n.trim() === "" || /^@?I\d+@?$/.test(n.trim())) return null;
+      return n;
+    };
+
+    // Traverse a tree and collect person nodes keyed by their hierarchy depth.
+    // Root person is depth 0, person nodes appear at even depths (0, 2, 4, …).
+    function collectByDepth(tree: ApiNode): Map<number, Entry[]> {
+      const map = new Map<number, Entry[]>();
+      function walk(node: ApiNode, d: number) {
+        if (node.type === "person" && d > 0 && d % 2 === 0) {
+          const gen = d / 2;
+          const name = displayOrNull(node.id);
+          if (name) {
+            if (!map.has(gen)) map.set(gen, []);
+            map.get(gen)!.push({ id: node.id, name });
+          }
+        }
+        for (const ch of node.children ?? []) walk(ch, d + 1);
+      }
+      walk(tree, 0);
+      return map;
+    }
+
+    const ancLabels = (g: number) => {
+      if (g === 1) return "Parents";
+      if (g === 2) return "Grandparents";
+      return "Great-".repeat(g - 2) + "Grandparents";
+    };
+    const descLabels = (g: number) => {
+      if (g === 1) return "Children";
+      if (g === 2) return "Grandchildren";
+      return "Great-".repeat(g - 2) + "Grandchildren";
+    };
+    const inLawLabels = (g: number) => {
+      if (g === 1) return "Children-in-law";
+      if (g === 2) return "Grandchildren-in-law";
+      return "Great-".repeat(g - 2) + "Grandchildren-in-law";
+    };
+
+    // Ancestors — oldest generation first
+    const ancMap = collectByDepth(anc.tree);
+    for (let g = ancDepth; g >= 1; g--) {
+      const ppl = ancMap.get(g) ?? [];
+      if (ppl.length > 0) categories.push({ label: ancLabels(g), people: ppl });
+    }
+
+    // Build spouse lookup from all spouse_families — skip unknowns
+    const spouseOf = new Map<string, Entry[]>();
+    const allFams = { ...(anc.spouse_families ?? {}), ...(desc.spouse_families ?? {}) };
+    Object.values(allFams).forEach((fam) => {
+      const h = fam.husb, w = fam.wife;
+      if (!h || !w) return;
+      const hn = displayOrNull(h), wn = displayOrNull(w);
+      if (!spouseOf.has(h)) spouseOf.set(h, []);
+      if (!spouseOf.has(w)) spouseOf.set(w, []);
+      if (wn) spouseOf.get(h)!.push({ id: w, name: wn });
+      if (hn) spouseOf.get(w)!.push({ id: h, name: hn });
+    });
+
+    // Descendants + in-laws
+    const descMap = collectByDepth(desc.tree);
+
+    // Spouses of the root person — insert before Children
+    const rootSpouses = (spouseOf.get(rootId) ?? []).filter(
+      (sp, i, arr) => arr.findIndex((x) => x.id === sp.id) === i
+    );
+    if (rootSpouses.length > 0) categories.push({ label: "Spouse(s)", people: rootSpouses });
+
+    for (let g = 1; g <= descDepth; g++) {
+      const ppl = descMap.get(g) ?? [];
+      if (ppl.length > 0) {
+        categories.push({ label: descLabels(g), people: ppl });
+        // Collect spouses of this generation (in-laws), excluding root and people already in tree
+        const inTreeIds = new Set([...ancMap.values(), ...descMap.values()].flat().map((e) => e.id));
+        inTreeIds.add(rootId);
+        const seen = new Set<string>();
+        const inLaws: Entry[] = [];
+        ppl.forEach((p) => {
+          (spouseOf.get(p.id) ?? []).forEach((sp) => {
+            if (!seen.has(sp.id) && !inTreeIds.has(sp.id)) {
+              seen.add(sp.id);
+              inLaws.push(sp);
+            }
+          });
+        });
+        if (inLaws.length > 0) categories.push({ label: inLawLabels(g), people: inLaws });
+      }
+    }
+
+    return categories;
+  }, [anc, desc, rootId, ancDepth, descDepth, nameById, firstNameById]);
+
+  // Recompute default collapsed state whenever categories change:
+  // only Parents and Children are open by default; everything else starts collapsed.
+  const defaultCollapsed = useMemo(
+    () => new Set(relativeCategories.map((c) => c.label).filter((l) => l !== "Parents" && l !== "Children" && l !== "Spouse(s)")),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [relativeCategories.map((c) => c.label).join(",")]
+  );
+  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(defaultCollapsed);
+  // Sync when the available categories change (e.g. root or depth changes)
+  const prevCatKey = useRef("");
+  const catKey = relativeCategories.map((c) => c.label).join(",");
+  if (catKey !== prevCatKey.current) {
+    prevCatKey.current = catKey;
+    setCollapsedCategories(defaultCollapsed);
+  }
+  const toggleCategory = (label: string) =>
+    setCollapsedCategories((prev) => {
+      const next = new Set(prev);
+      next.has(label) ? next.delete(label) : next.add(label);
+      return next;
+    });
 
   useEffect(() => {
     fetch(`${import.meta.env.VITE_API_URL}/api/people`, {
@@ -550,9 +682,6 @@ export default function TreeView({ initialRootId, firstNameById }: { initialRoot
   useEffect(() => {
     if (!svgRef.current || !anc || !desc) return;
 
-    const getBaseName = (displayName: string) => displayName.split(",")[0];
-    const nameById = new Map(people.map((p) => [p.id, getBaseName(p.name)]));
-
     const svg = d3.select(svgRef.current);
     svg.selectAll("*").remove();
 
@@ -565,8 +694,32 @@ export default function TreeView({ initialRootId, firstNameById }: { initialRoot
     // Set up zoom behavior
     const zoomBehavior = d3
       .zoom<SVGSVGElement, unknown>()
-      .scaleExtent([0.25, 2.5])
-      .on("zoom", (event) => g.attr("transform", event.transform));
+      .scaleExtent([0.1, 2.5])
+      .on("zoom", (event) => {
+        const { k } = event.transform;
+        g.attr("transform", event.transform);
+
+        // Semantic zoom: scale nodes inversely so they stay legible when zoomed out.
+        // Visual size = 1/k, clamped so nodes don't grow too large when very zoomed out.
+        const nodeScale = Math.min(1 / k, 3);
+        svg.selectAll<SVGGElement, unknown>("[data-scalable]").each(function () {
+          const el = d3.select(this);
+          const tag = (this as Element).tagName.toLowerCase();
+          if (tag === "circle") {
+            // Junction dot: scale radius
+            const baseR = 4;
+            el.attr("r", baseR * nodeScale);
+          } else {
+            // Person/spouse group: apply inverse scale transform around its own origin
+            const tx = el.attr("transform") ?? "";
+            // Extract existing translate
+            const m = tx.match(/translate\(([^,]+),([^)]+)\)/);
+            if (m) {
+              el.attr("transform", `translate(${m[1]},${m[2]}) scale(${nodeScale})`);
+            }
+          }
+        });
+      });
 
     svg.call(zoomBehavior);
 
@@ -626,7 +779,7 @@ export default function TreeView({ initialRootId, firstNameById }: { initialRoot
   }, [people, anc, desc, firstNameById, showDuplicates]);
 
   return (
-    <div style={{ display: "grid", gridTemplateRows: "auto 1fr", gap: 12, height: "80vh", width: "80vw", padding: 16 }}>
+    <div style={{ display: "grid", gridTemplateRows: "auto 1fr", gap: 12, height: "100%", width: "100%", padding: 16, boxSizing: "border-box" }}>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "center" }}>
         <div style={{ fontWeight: 800, fontSize: 18 }}>Family Tree</div>
 
@@ -670,8 +823,56 @@ export default function TreeView({ initialRootId, firstNameById }: { initialRoot
         <div style={{ opacity: 0.7, fontSize: 12 }}>Tip: scroll to zoom, drag to pan, click a person to re-center.</div>
       </div>
 
-      <div style={{ border: "1px solid rgba(0,0,0,0.12)", borderRadius: 16, overflow: "hidden" }}>
-        <svg ref={svgRef} style={{ width: "100%", height: "100%", background: "white", color: "#333", touchAction: "none" }} />
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 270px", gap: 12, overflow: "hidden" }}>
+        <div style={{ border: "1px solid rgba(0,0,0,0.12)", borderRadius: 16, overflow: "hidden" }}>
+          <svg ref={svgRef} style={{ width: "100%", height: "100%", background: "white", color: "#333", touchAction: "none" }} />
+        </div>
+
+        {/* Relatives side panel */}
+        <div style={{ border: "1px solid rgba(0,0,0,0.12)", borderRadius: 16, overflowY: "auto", padding: "12px 14px", background: "#fafafa", fontSize: 13 }}>
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6 }}>
+            {rootId ? (firstNameById?.get(rootId) ?? nameById.get(rootId) ?? rootId) : "—"}'s Relatives
+          </div>
+          <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+            <button
+              onClick={() => setCollapsedCategories(new Set())}
+              style={{ fontSize: 10, padding: "2px 7px", borderRadius: 4, border: "1px solid #ccc", background: "white", cursor: "pointer" }}
+            >Expand all</button>
+            <button
+              onClick={() => setCollapsedCategories(new Set(relativeCategories.map((c) => c.label)))}
+              style={{ fontSize: 10, padding: "2px 7px", borderRadius: 4, border: "1px solid #ccc", background: "white", cursor: "pointer" }}
+            >Collapse all</button>
+          </div>
+          {relativeCategories.length === 0 && <div style={{ opacity: 0.5 }}>No data</div>}
+          {relativeCategories.map((cat) => {
+            const collapsed = collapsedCategories.has(cat.label);
+            return (
+              <div key={cat.label} style={{ marginBottom: 8 }}>
+                <div
+                  onClick={() => toggleCategory(cat.label)}
+                  style={{ fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.06em",
+                    opacity: 0.65, marginBottom: collapsed ? 0 : 4, cursor: "pointer",
+                    display: "flex", justifyContent: "space-between", alignItems: "center",
+                    userSelect: "none", padding: "2px 0" }}
+                >
+                  <span>{cat.label} ({cat.people.length})</span>
+                  <span style={{ fontSize: 10, opacity: 0.7 }}>{collapsed ? "▶" : "▼"}</span>
+                </div>
+                {!collapsed && cat.people.map((p) => (
+                  <div
+                    key={p.id}
+                    onClick={() => setRootId(p.id)}
+                    style={{ cursor: "pointer", padding: "3px 6px", borderRadius: 6, marginBottom: 2, lineHeight: 1.4 }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "#e8f0fe")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                  >
+                    {p.name}
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
