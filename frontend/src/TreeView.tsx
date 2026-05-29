@@ -136,6 +136,14 @@ function drawAncestryTree(opts: {
       if (sibGroup && sibGroup.length > 1 && sibGroup[0] !== d) return;
     }
 
+    // For descendant trees without duplicates: skip family junctions that have no real
+    // children nodes (all children were duplicates and became extra_links). These would
+    // render as empty junctions with only dashed cross-links, which is confusing.
+    if (direction === "down" && !showDuplicates) {
+      const realChildren = (d.children ?? []).filter((c) => c.data.type === "person");
+      if (realChildren.length === 0) return;
+    }
+
     // Use the d3 node's own coordinates directly — avoids stale pos-map values
     // when duplicate person nodes have been injected (showDuplicates mode).
     const jx = d.x;
