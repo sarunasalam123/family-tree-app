@@ -18,6 +18,8 @@ app.add_middleware(
         "http://localhost:3000",
         "https://gregarious-phoenix-6ad37a.netlify.app",
         "https://aaniver.netlify.app",
+        "https://staging--aaniver.netlify.app",
+        "https://family-tree-app-staging.onrender.com",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -230,7 +232,7 @@ def build_anc_tree(root_person_id: str, depth: int = 4):
     
     return {"tree": tree, "extra_links": extra_links, "spouse_families": spouse_families}
 
-graph = backend.build_graph(people)
+graph = backend.build_graph(people, families)
 
 @app.get("/api/connect")
 def connect(a: str, b: str, _: bool = Depends(verify_password)):

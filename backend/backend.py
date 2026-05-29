@@ -108,7 +108,7 @@ def parse_gedcom(filepath):
     return people, families
 
 
-def build_graph(people):
+def build_graph(people, families=None):
     graph = defaultdict(list)
     for pid, person in people.items():
         for p in person.parents:
@@ -116,6 +116,21 @@ def build_graph(people):
             graph[p].append((pid, "child"))
         for s in person.spouses:
             graph[pid].append((s, "spouse"))
+
+    # Add direct sibling edges so sibling paths cost 1 instead of 2 (via parent)
+    if families:
+        seen_pairs = set()
+        for fam in families.values():
+            children = [c for c in fam.chil if c in people]
+            for i in range(len(children)):
+                for j in range(i + 1, len(children)):
+                    a, b = children[i], children[j]
+                    pair = (min(a, b), max(a, b))
+                    if pair not in seen_pairs:
+                        seen_pairs.add(pair)
+                        graph[a].append((b, "sibling"))
+                        graph[b].append((a, "sibling"))
+
     return graph
 
 
