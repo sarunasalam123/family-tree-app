@@ -778,7 +778,7 @@ export default function TreeView({ initialRootId, firstNameById }: { initialRoot
   }, [people, anc, desc, firstNameById, showDuplicates]);
 
   return (
-    <div style={{ display: "grid", gridTemplateRows: "auto 1fr", gap: 12, height: "80vh", width: "80vw", padding: 16 }}>
+    <div style={{ display: "grid", gridTemplateRows: "auto 1fr", gap: 12, height: "100%", width: "100%", padding: 16, boxSizing: "border-box" }}>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "center" }}>
         <div style={{ fontWeight: 800, fontSize: 18 }}>Family Tree</div>
 
