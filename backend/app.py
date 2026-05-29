@@ -18,6 +18,7 @@ app.add_middleware(
         "http://localhost:3000",
         "https://gregarious-phoenix-6ad37a.netlify.app",
         "https://aaniver.netlify.app",
+        "https://staging--aaniver.netlify.app",
     ],
     allow_credentials=True,
     allow_methods=["*"],
