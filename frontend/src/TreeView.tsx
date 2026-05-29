@@ -275,51 +275,13 @@ function drawAncestryTree(opts: {
       return `M${d.sx},${d.sy} C${d.sx},${midY1} ${d.tx},${midY2} ${d.tx},${d.ty}`;
     });
 
-  // Invisible wide stroke to make edges easy to hover
-  linkG
-    .selectAll("path.link-hover")
-    .data(links)
-    .join("path")
-    .attr("class", "link-hover")
-    .attr("fill", "none")
-    .attr("stroke", "transparent")
-    .attr("stroke-width", 16)
-    .attr("d", (_, i) => linkPaths.nodes()[i]?.getAttribute("d") ?? "")
-    .style("cursor", "default")
-    .on("mouseenter", function (_, linkDatum) {
-      // Highlight the visible path
+  // Invisible wide stroke to make edges easy to hover (only when showDuplicates=false)
+  if (!showDuplicates) {
+    const resetAll = () => {
       linkPaths
-        .filter((ld) => ld === linkDatum)
-        .attr("stroke", "#e67e00")
-        .attr("stroke-opacity", 1)
-        .attr("stroke-width", 3);
-      // Highlight matching endpoint nodes (person boxes, spouse boxes, junction dots)
-      const keys = new Set([linkDatum.fromKey, linkDatum.toKey].filter(Boolean) as string[]);
-      group.selectAll<SVGGElement, unknown>("g.person,g.spouse")
-        .each(function (nd: unknown) {
-          const nk = (this as SVGGElement).getAttribute("data-nkey");
-          if (nk && keys.has(nk)) {
-            d3.select(this).select("rect")
-              .attr("stroke", "#e67e00")
-              .attr("stroke-opacity", 1)
-              .attr("stroke-width", 2.5);
-          }
-        });
-      group.selectAll<SVGCircleElement, { fid: string }>("circle.junction")
-        .each(function (jd) {
-          if (keys.has(`fam:${jd.fid}`)) {
-            d3.select(this).attr("fill", "#e67e00").attr("fill-opacity", 1).attr("r", 6);
-          }
-        });
-    })
-    .on("mouseleave", function (_, linkDatum) {
-      // Restore visible path
-      linkPaths
-        .filter((ld) => ld === linkDatum)
         .attr("stroke", (d) => (d.kind === "extra" ? "#888" : "#333"))
         .attr("stroke-opacity", (d) => (d.kind === "extra" ? 0.5 : 0.6))
         .attr("stroke-width", (d) => (d.kind === "extra" ? 1.75 : 2));
-      // Restore nodes
       group.selectAll<SVGGElement, unknown>("g.person,g.spouse")
         .each(function () {
           d3.select(this).select("rect")
@@ -331,7 +293,69 @@ function drawAncestryTree(opts: {
         .each(function () {
           d3.select(this).attr("fill", "currentColor").attr("fill-opacity", 0.55).attr("r", 4);
         });
-    });
+    };
+
+    linkG
+      .selectAll("path.link-hover")
+      .data(links)
+      .join("path")
+      .attr("class", "link-hover")
+      .attr("fill", "none")
+      .attr("stroke", "transparent")
+      .attr("stroke-width", 16)
+      .attr("d", (_, i) => linkPaths.nodes()[i]?.getAttribute("d") ?? "")
+      .style("cursor", "default")
+      .on("mouseenter", function (_, linkDatum) {
+        resetAll();
+
+        // Collect junction keys touched by the hovered link
+        const hoveredJunctionKeys = new Set(
+          [linkDatum.fromKey, linkDatum.toKey].filter((k) => k?.startsWith("fam:")) as string[]
+        );
+
+        // Find all links that share any of those junction keys
+        const relatedLinks = new Set<Link>([linkDatum]);
+        const relatedNodeKeys = new Set<string>();
+        links.forEach((l) => {
+          const sharesJunction =
+            (l.fromKey && hoveredJunctionKeys.has(l.fromKey)) ||
+            (l.toKey && hoveredJunctionKeys.has(l.toKey));
+          if (sharesJunction) {
+            relatedLinks.add(l);
+            if (l.fromKey) relatedNodeKeys.add(l.fromKey);
+            if (l.toKey) relatedNodeKeys.add(l.toKey);
+          }
+        });
+
+        // Highlight all related links
+        linkPaths
+          .filter((ld) => relatedLinks.has(ld))
+          .attr("stroke", "#e67e00")
+          .attr("stroke-opacity", 1)
+          .attr("stroke-width", 3);
+
+        // Highlight all connected person/spouse boxes
+        group.selectAll<SVGGElement, unknown>("g.person,g.spouse")
+          .each(function () {
+            const nk = (this as SVGGElement).getAttribute("data-nkey");
+            if (nk && relatedNodeKeys.has(nk)) {
+              d3.select(this).select("rect")
+                .attr("stroke", "#e67e00")
+                .attr("stroke-opacity", 1)
+                .attr("stroke-width", 2.5);
+            }
+          });
+
+        // Highlight junction dots for all involved junctions
+        group.selectAll<SVGCircleElement, { fid: string }>("circle.junction")
+          .each(function (jd) {
+            if (hoveredJunctionKeys.has(`fam:${jd.fid}`)) {
+              d3.select(this).attr("fill", "#e67e00").attr("fill-opacity", 1).attr("r", 6);
+            }
+          });
+      })
+      .on("mouseleave", resetAll);
+  }
 
   // Person nodes
   const filteredPersonNodes =
