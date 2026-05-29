@@ -201,28 +201,18 @@ function drawAncestryTree(opts: {
       // Ancestors: parents-junction -> the child-person that owns this family (d.parent)
       const sibGroup = famSiblingGroups.get(d.data.id);
       if (sibGroup && sibGroup.length > 1) {
-        // Sibling trunk+bar pattern: draw once from the primary junction.
-        // Trunk: junction → bar level; bar: horizontal spanning all siblings; stems: each sibling → bar.
-        const barY = jy + TRUNK_H;
-        links.push({ sx: jx, sy: jy, tx: jx, ty: barY, kind: "normal" });
-
-        const sibXs: number[] = [jx];
+        // Multiple siblings share this family. Draw the junction+parents once (primary),
+        // then draw individual bezier lines from the single junction to each sibling child.
         sibGroup.forEach((nd) => {
           if (!nd.parent || nd.parent.data.type !== "person") return;
-          const sibX = nd.parent.x;
-          const sibY = nd.parent.y;
           const sibId = nd.parent.data.id;
-          sibXs.push(sibX);
           if (connectTo && sibId === rootPersonId) {
             const targetLocal = { x: connectTo.x - shiftX, y: connectTo.y - shiftY };
-            links.push({ sx: targetLocal.x, sy: targetLocal.y + BOX_H / 2, tx: targetLocal.x, ty: barY, kind: "normal" });
+            links.push({ sx: jx, sy: jy, tx: targetLocal.x, ty: targetLocal.y, kind: "normal" });
           } else {
-            links.push({ sx: sibX, sy: sibY + BOX_H / 2, tx: sibX, ty: barY, kind: "normal" });
+            links.push({ sx: jx, sy: jy, tx: nd.parent.x, ty: nd.parent.y + BOX_H / 2, kind: "normal" });
           }
         });
-
-        // Horizontal bar connecting all siblings
-        links.push({ sx: Math.min(...sibXs), sy: barY, tx: Math.max(...sibXs), ty: barY, kind: "bar" });
       } else {
         // Single child: normal bezier junction → child
         const childPerson = d.parent;
@@ -277,7 +267,6 @@ function drawAncestryTree(opts: {
     .attr("stroke-width", (d) => (d.kind === "extra" ? 1.75 : 2))
     .attr("stroke-dasharray", (d) => (d.kind === "extra" ? "5 5" : null))
     .attr("d", (d) => {
-      if (d.kind === "bar") return `M${d.sx},${d.sy} L${d.tx},${d.ty}`;
       const s = d.ty >= d.sy ? 1 : -1;
       const midY1 = d.sy + 50 * s;
       const midY2 = d.ty - 50 * s;
