@@ -14,7 +14,7 @@ type ExtraLink = { from_fam: string; to_person: string };
 
 type ApiResponse = { tree: ApiNode; extra_links: ExtraLink[]; spouse_families?: { [key: string]: { id: string; husb?: string | null; wife?: string | null } } };
 
-type Link = { from?: string; to?: string; kind: string; sx?: number; sy?: number; tx?: number; ty?: number };
+type Link = { from?: string; to?: string; kind: string; sx: number; sy: number; tx: number; ty: number; fromKey?: string; toKey?: string };
 
 function drawAncestryTree(opts: {
   g: d3.Selection<SVGGElement, unknown, null, undefined>;
@@ -163,7 +163,7 @@ function drawAncestryTree(opts: {
       if (!hpos) {
         spouseBoxes.push({ pid: husbId, name: displayNameById?.get(husbId) ?? nameById.get(husbId) ?? "unknown", x: hx, y: hy, forceLocal: useLocalHusb });
       }
-      links.push({ sx: hx, sy: hy, tx: jx, ty: jy, kind: "normal" });
+      links.push({ sx: hx, sy: hy, tx: jx, ty: jy, kind: "normal", fromKey: `person:${husbId}`, toKey: `fam:${d.data.id}` });
     }
 
     if (wifeId) {
@@ -183,19 +183,19 @@ function drawAncestryTree(opts: {
       if (!wpos) {
         spouseBoxes.push({ pid: wifeId, name: displayNameById?.get(wifeId) ?? nameById.get(wifeId) ?? "unknown", x: wx, y: wy, forceLocal: useLocalWife });
       }
-      links.push({ sx: wx, sy: wy, tx: jx, ty: jy, kind: "normal" });
+      links.push({ sx: wx, sy: wy, tx: jx, ty: jy, kind: "normal", fromKey: `person:${wifeId}`, toKey: `fam:${d.data.id}` });
     }
 
     if (direction === "down") {
       // Descendants: junction -> trunk -> children
       const trunkEndX = jx;
       const trunkEndY = jy + TRUNK_H;
-      links.push({ sx: jx, sy: jy, tx: trunkEndX, ty: trunkEndY, kind: "normal" });
+      links.push({ sx: jx, sy: jy, tx: trunkEndX, ty: trunkEndY, kind: "normal", fromKey: `fam:${d.data.id}`, toKey: `trunk:${d.data.id}` });
 
       (d.children ?? []).forEach((child) => {
         if (child.data.type !== "person") return;
         // Use d3 node's own position — correct even for duplicate-injected nodes
-        links.push({ sx: trunkEndX, sy: trunkEndY, tx: child.x, ty: child.y - BOX_H / 2, kind: "normal" });
+        links.push({ sx: trunkEndX, sy: trunkEndY, tx: child.x, ty: child.y - BOX_H / 2, kind: "normal", fromKey: `fam:${d.data.id}`, toKey: `person:${child.data.id}` });
       });
     } else {
       // Ancestors: parents-junction -> the child-person that owns this family (d.parent)
@@ -208,9 +208,9 @@ function drawAncestryTree(opts: {
           const sibId = nd.parent.data.id;
           if (connectTo && sibId === rootPersonId) {
             const targetLocal = { x: connectTo.x - shiftX, y: connectTo.y - shiftY };
-            links.push({ sx: jx, sy: jy, tx: targetLocal.x, ty: targetLocal.y, kind: "normal" });
+            links.push({ sx: jx, sy: jy, tx: targetLocal.x, ty: targetLocal.y, kind: "normal", fromKey: `fam:${d.data.id}`, toKey: `person:${sibId}` });
           } else {
-            links.push({ sx: jx, sy: jy, tx: nd.parent.x, ty: nd.parent.y + BOX_H / 2, kind: "normal" });
+            links.push({ sx: jx, sy: jy, tx: nd.parent.x, ty: nd.parent.y + BOX_H / 2, kind: "normal", fromKey: `fam:${d.data.id}`, toKey: `person:${sibId}` });
           }
         });
       } else {
@@ -220,9 +220,9 @@ function drawAncestryTree(opts: {
           const childId = childPerson.data.id;
           if (connectTo && childId === rootPersonId) {
             const targetLocal = { x: connectTo.x - shiftX, y: connectTo.y - shiftY };
-            links.push({ sx: jx, sy: jy, tx: targetLocal.x, ty: targetLocal.y, kind: "normal" });
+            links.push({ sx: jx, sy: jy, tx: targetLocal.x, ty: targetLocal.y, kind: "normal", fromKey: `fam:${d.data.id}`, toKey: `person:${childId}` });
           } else {
-            links.push({ sx: jx, sy: jy, tx: childPerson.x, ty: childPerson.y + BOX_H / 2, kind: "normal" });
+            links.push({ sx: jx, sy: jy, tx: childPerson.x, ty: childPerson.y + BOX_H / 2, kind: "normal", fromKey: `fam:${d.data.id}`, toKey: `person:${childId}` });
           }
         }
       }
@@ -256,11 +256,13 @@ function drawAncestryTree(opts: {
   }
 
   // Links
-  group
-    .append("g")
+  const linkG = group.append("g");
+
+  const linkPaths = linkG
     .selectAll("path.link")
     .data(links)
     .join("path")
+    .attr("class", "link")
     .attr("fill", "none")
     .attr("stroke", (d) => (d.kind === "extra" ? "#888" : "#333"))
     .attr("stroke-opacity", (d) => (d.kind === "extra" ? 0.5 : 0.6))
@@ -273,6 +275,64 @@ function drawAncestryTree(opts: {
       return `M${d.sx},${d.sy} C${d.sx},${midY1} ${d.tx},${midY2} ${d.tx},${d.ty}`;
     });
 
+  // Invisible wide stroke to make edges easy to hover
+  linkG
+    .selectAll("path.link-hover")
+    .data(links)
+    .join("path")
+    .attr("class", "link-hover")
+    .attr("fill", "none")
+    .attr("stroke", "transparent")
+    .attr("stroke-width", 16)
+    .attr("d", (_, i) => linkPaths.nodes()[i]?.getAttribute("d") ?? "")
+    .style("cursor", "default")
+    .on("mouseenter", function (_, linkDatum) {
+      // Highlight the visible path
+      linkPaths
+        .filter((ld) => ld === linkDatum)
+        .attr("stroke", "#e67e00")
+        .attr("stroke-opacity", 1)
+        .attr("stroke-width", 3);
+      // Highlight matching endpoint nodes (person boxes, spouse boxes, junction dots)
+      const keys = new Set([linkDatum.fromKey, linkDatum.toKey].filter(Boolean) as string[]);
+      group.selectAll<SVGGElement, unknown>("g.person,g.spouse")
+        .each(function (nd: unknown) {
+          const nk = (this as SVGGElement).getAttribute("data-nkey");
+          if (nk && keys.has(nk)) {
+            d3.select(this).select("rect")
+              .attr("stroke", "#e67e00")
+              .attr("stroke-opacity", 1)
+              .attr("stroke-width", 2.5);
+          }
+        });
+      group.selectAll<SVGCircleElement, { fid: string }>("circle.junction")
+        .each(function (jd) {
+          if (keys.has(`fam:${jd.fid}`)) {
+            d3.select(this).attr("fill", "#e67e00").attr("fill-opacity", 1).attr("r", 6);
+          }
+        });
+    })
+    .on("mouseleave", function (_, linkDatum) {
+      // Restore visible path
+      linkPaths
+        .filter((ld) => ld === linkDatum)
+        .attr("stroke", (d) => (d.kind === "extra" ? "#888" : "#333"))
+        .attr("stroke-opacity", (d) => (d.kind === "extra" ? 0.5 : 0.6))
+        .attr("stroke-width", (d) => (d.kind === "extra" ? 1.75 : 2));
+      // Restore nodes
+      group.selectAll<SVGGElement, unknown>("g.person,g.spouse")
+        .each(function () {
+          d3.select(this).select("rect")
+            .attr("stroke", "#333")
+            .attr("stroke-opacity", 0.4)
+            .attr("stroke-width", 1);
+        });
+      group.selectAll<SVGCircleElement, { fid: string }>("circle.junction")
+        .each(function () {
+          d3.select(this).attr("fill", "currentColor").attr("fill-opacity", 0.55).attr("r", 4);
+        });
+    });
+
   // Person nodes
   const filteredPersonNodes =
     skipRootPersonBox && rootPersonId ? personNodes.filter((d) => d.data.id !== rootPersonId) : personNodes;
@@ -282,6 +342,8 @@ function drawAncestryTree(opts: {
     .selectAll("g.person")
     .data(filteredPersonNodes)
     .join("g")
+    .attr("class", "person")
+    .attr("data-nkey", (d) => `person:${d.data.id}`)
     .attr("transform", (d) => `translate(${d.x},${d.y})`)
     .style("cursor", "pointer")
     .on("click", (_, d) => onPersonClick(d.data.id));
@@ -305,6 +367,8 @@ function drawAncestryTree(opts: {
     .selectAll("g.spouse")
     .data(filteredSpouses)
     .join("g")
+    .attr("class", "spouse")
+    .attr("data-nkey", (d) => `person:${d.pid}`)
     .attr("transform", (d) => `translate(${d.x},${d.y})`)
     .style("cursor", "pointer")
     .on("click", (_, d) => onPersonClick(d.pid));
@@ -320,6 +384,7 @@ function drawAncestryTree(opts: {
     .selectAll("circle.junction")
     .data(junctions)
     .join("circle")
+    .attr("class", "junction")
     .attr("cx", (d) => d.x)
     .attr("cy", (d) => d.y)
     .attr("r", 4)
