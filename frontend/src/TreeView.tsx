@@ -14,7 +14,7 @@ type ExtraLink = { from_fam: string; to_person: string };
 
 type ApiResponse = { tree: ApiNode; extra_links: ExtraLink[]; spouse_families?: { [key: string]: { id: string; husb?: string | null; wife?: string | null } } };
 
-type Link = { from?: string; to?: string; kind: string; sx?: number; sy?: number; tx?: number; ty?: number };
+type Link = { from?: string; to?: string; kind: string; sx: number; sy: number; tx: number; ty: number; fromKey?: string; toKey?: string };
 
 function drawAncestryTree(opts: {
   g: d3.Selection<SVGGElement, unknown, null, undefined>;
@@ -113,9 +113,36 @@ function drawAncestryTree(opts: {
   const junctions: { fid: string; x: number; y: number }[] = [];
   const links: Link[] = [];
 
+  // For ancestor trees (direction="up") with showDuplicates=false, group family nodes by fid.
+  // When the same family appears multiple times (siblings who are both ancestors of the root),
+  // the primary occurrence draws a trunk+bar+stems pattern; secondaries are skipped entirely.
+  const famSiblingGroups = new Map<string, d3.HierarchyNode<ApiNode>[]>();
+  if (direction === "up" && !showDuplicates) {
+    root.descendants().forEach((nd) => {
+      if (nd.data.type !== "family") return;
+      if (!famSiblingGroups.has(nd.data.id)) famSiblingGroups.set(nd.data.id, []);
+      famSiblingGroups.get(nd.data.id)!.push(nd);
+    });
+  }
+
   // Normal links based on the hierarchy
   root.descendants().forEach((d) => {
     if (d.data.type !== "family") return;
+
+    // For ancestor trees without duplicates: skip secondary occurrences of the same family.
+    // The primary occurrence will draw the trunk+bar+stems covering all siblings.
+    if (direction === "up" && !showDuplicates) {
+      const sibGroup = famSiblingGroups.get(d.data.id);
+      if (sibGroup && sibGroup.length > 1 && sibGroup[0] !== d) return;
+    }
+
+    // For descendant trees without duplicates: skip family junctions that have no real
+    // children nodes (all children were duplicates and became extra_links). These would
+    // render as empty junctions with only dashed cross-links, which is confusing.
+    if (direction === "down" && !showDuplicates) {
+      const realChildren = (d.children ?? []).filter((c) => c.data.type === "person");
+      if (realChildren.length === 0) return;
+    }
 
     // Use the d3 node's own coordinates directly — avoids stale pos-map values
     // when duplicate person nodes have been injected (showDuplicates mode).
@@ -144,7 +171,7 @@ function drawAncestryTree(opts: {
       if (!hpos) {
         spouseBoxes.push({ pid: husbId, name: displayNameById?.get(husbId) ?? nameById.get(husbId) ?? "unknown", x: hx, y: hy, forceLocal: useLocalHusb });
       }
-      links.push({ sx: hx, sy: hy, tx: jx, ty: jy, kind: "normal" });
+      links.push({ sx: hx, sy: hy, tx: jx, ty: jy, kind: "normal", fromKey: `person:${husbId}`, toKey: `fam:${d.data.id}` });
     }
 
     if (wifeId) {
@@ -164,31 +191,47 @@ function drawAncestryTree(opts: {
       if (!wpos) {
         spouseBoxes.push({ pid: wifeId, name: displayNameById?.get(wifeId) ?? nameById.get(wifeId) ?? "unknown", x: wx, y: wy, forceLocal: useLocalWife });
       }
-      links.push({ sx: wx, sy: wy, tx: jx, ty: jy, kind: "normal" });
+      links.push({ sx: wx, sy: wy, tx: jx, ty: jy, kind: "normal", fromKey: `person:${wifeId}`, toKey: `fam:${d.data.id}` });
     }
 
     if (direction === "down") {
       // Descendants: junction -> trunk -> children
       const trunkEndX = jx;
       const trunkEndY = jy + TRUNK_H;
-      links.push({ sx: jx, sy: jy, tx: trunkEndX, ty: trunkEndY, kind: "normal" });
+      links.push({ sx: jx, sy: jy, tx: trunkEndX, ty: trunkEndY, kind: "normal", fromKey: `fam:${d.data.id}`, toKey: `trunk:${d.data.id}` });
 
       (d.children ?? []).forEach((child) => {
         if (child.data.type !== "person") return;
         // Use d3 node's own position — correct even for duplicate-injected nodes
-        links.push({ sx: trunkEndX, sy: trunkEndY, tx: child.x, ty: child.y - BOX_H / 2, kind: "normal" });
+        links.push({ sx: trunkEndX, sy: trunkEndY, tx: child.x, ty: child.y - BOX_H / 2, kind: "normal", fromKey: `fam:${d.data.id}`, toKey: `person:${child.data.id}` });
       });
     } else {
       // Ancestors: parents-junction -> the child-person that owns this family (d.parent)
-      const childPerson = d.parent;
-      if (childPerson && childPerson.data.type === "person") {
-        const childId = childPerson.data.id;
-
-        if (connectTo && childId === rootPersonId) {
-          const targetLocal = { x: connectTo.x - shiftX, y: connectTo.y - shiftY };
-          links.push({ sx: jx, sy: jy, tx: targetLocal.x, ty: targetLocal.y, kind: "normal" });
-        } else {
-            links.push({ sx: jx, sy: jy, tx: childPerson.x, ty: childPerson.y + BOX_H / 2, kind: "normal" });
+      const sibGroup = famSiblingGroups.get(d.data.id);
+      if (sibGroup && sibGroup.length > 1) {
+        // Multiple siblings share this family. Draw the junction+parents once (primary),
+        // then draw individual bezier lines from the single junction to each sibling child.
+        sibGroup.forEach((nd) => {
+          if (!nd.parent || nd.parent.data.type !== "person") return;
+          const sibId = nd.parent.data.id;
+          if (connectTo && sibId === rootPersonId) {
+            const targetLocal = { x: connectTo.x - shiftX, y: connectTo.y - shiftY };
+            links.push({ sx: jx, sy: jy, tx: targetLocal.x, ty: targetLocal.y, kind: "normal", fromKey: `fam:${d.data.id}`, toKey: `person:${sibId}` });
+          } else {
+            links.push({ sx: jx, sy: jy, tx: nd.parent.x, ty: nd.parent.y + BOX_H / 2, kind: "normal", fromKey: `fam:${d.data.id}`, toKey: `person:${sibId}` });
+          }
+        });
+      } else {
+        // Single child: normal bezier junction → child
+        const childPerson = d.parent;
+        if (childPerson && childPerson.data.type === "person") {
+          const childId = childPerson.data.id;
+          if (connectTo && childId === rootPersonId) {
+            const targetLocal = { x: connectTo.x - shiftX, y: connectTo.y - shiftY };
+            links.push({ sx: jx, sy: jy, tx: targetLocal.x, ty: targetLocal.y, kind: "normal", fromKey: `fam:${d.data.id}`, toKey: `person:${childId}` });
+          } else {
+            links.push({ sx: jx, sy: jy, tx: childPerson.x, ty: childPerson.y + BOX_H / 2, kind: "normal", fromKey: `fam:${d.data.id}`, toKey: `person:${childId}` });
+          }
         }
       }
     }
@@ -221,11 +264,13 @@ function drawAncestryTree(opts: {
   }
 
   // Links
-  group
-    .append("g")
+  const linkG = group.append("g");
+
+  const linkPaths = linkG
     .selectAll("path.link")
     .data(links)
     .join("path")
+    .attr("class", "link")
     .attr("fill", "none")
     .attr("stroke", (d) => (d.kind === "extra" ? "#888" : "#333"))
     .attr("stroke-opacity", (d) => (d.kind === "extra" ? 0.5 : 0.6))
@@ -238,6 +283,88 @@ function drawAncestryTree(opts: {
       return `M${d.sx},${d.sy} C${d.sx},${midY1} ${d.tx},${midY2} ${d.tx},${d.ty}`;
     });
 
+  // Invisible wide stroke to make edges easy to hover (only when showDuplicates=false)
+  if (!showDuplicates) {
+    const resetAll = () => {
+      linkPaths
+        .attr("stroke", (d) => (d.kind === "extra" ? "#888" : "#333"))
+        .attr("stroke-opacity", (d) => (d.kind === "extra" ? 0.5 : 0.6))
+        .attr("stroke-width", (d) => (d.kind === "extra" ? 1.75 : 2));
+      group.selectAll<SVGGElement, unknown>("g.person,g.spouse")
+        .each(function () {
+          d3.select(this).select("rect")
+            .attr("stroke", "#333")
+            .attr("stroke-opacity", 0.4)
+            .attr("stroke-width", 1);
+        });
+      group.selectAll<SVGCircleElement, { fid: string }>("circle.junction")
+        .each(function () {
+          d3.select(this).attr("fill", "currentColor").attr("fill-opacity", 0.55).attr("r", 4);
+        });
+    };
+
+    linkG
+      .selectAll("path.link-hover")
+      .data(links)
+      .join("path")
+      .attr("class", "link-hover")
+      .attr("fill", "none")
+      .attr("stroke", "transparent")
+      .attr("stroke-width", 16)
+      .attr("d", (_, i) => linkPaths.nodes()[i]?.getAttribute("d") ?? "")
+      .style("cursor", "default")
+      .on("mouseenter", function (_, linkDatum) {
+        resetAll();
+
+        // Collect junction keys touched by the hovered link
+        const hoveredJunctionKeys = new Set(
+          [linkDatum.fromKey, linkDatum.toKey].filter((k) => k?.startsWith("fam:")) as string[]
+        );
+
+        // Find all links that share any of those junction keys
+        const relatedLinks = new Set<Link>([linkDatum]);
+        const relatedNodeKeys = new Set<string>();
+        links.forEach((l) => {
+          const sharesJunction =
+            (l.fromKey && hoveredJunctionKeys.has(l.fromKey)) ||
+            (l.toKey && hoveredJunctionKeys.has(l.toKey));
+          if (sharesJunction) {
+            relatedLinks.add(l);
+            if (l.fromKey) relatedNodeKeys.add(l.fromKey);
+            if (l.toKey) relatedNodeKeys.add(l.toKey);
+          }
+        });
+
+        // Highlight all related links
+        linkPaths
+          .filter((ld) => relatedLinks.has(ld))
+          .attr("stroke", "#e67e00")
+          .attr("stroke-opacity", 1)
+          .attr("stroke-width", 3);
+
+        // Highlight all connected person/spouse boxes
+        group.selectAll<SVGGElement, unknown>("g.person,g.spouse")
+          .each(function () {
+            const nk = (this as SVGGElement).getAttribute("data-nkey");
+            if (nk && relatedNodeKeys.has(nk)) {
+              d3.select(this).select("rect")
+                .attr("stroke", "#e67e00")
+                .attr("stroke-opacity", 1)
+                .attr("stroke-width", 2.5);
+            }
+          });
+
+        // Highlight junction dots for all involved junctions
+        group.selectAll<SVGCircleElement, { fid: string }>("circle.junction")
+          .each(function (jd) {
+            if (hoveredJunctionKeys.has(`fam:${jd.fid}`)) {
+              d3.select(this).attr("fill", "#e67e00").attr("fill-opacity", 1).attr("r", 6);
+            }
+          });
+      })
+      .on("mouseleave", resetAll);
+  }
+
   // Person nodes
   const filteredPersonNodes =
     skipRootPersonBox && rootPersonId ? personNodes.filter((d) => d.data.id !== rootPersonId) : personNodes;
@@ -247,6 +374,8 @@ function drawAncestryTree(opts: {
     .selectAll("g.person")
     .data(filteredPersonNodes)
     .join("g")
+    .attr("class", "person")
+    .attr("data-nkey", (d) => `person:${d.data.id}`)
     .attr("transform", (d) => `translate(${d.x},${d.y})`)
     .style("cursor", "pointer")
     .on("click", (_, d) => onPersonClick(d.data.id));
@@ -270,6 +399,8 @@ function drawAncestryTree(opts: {
     .selectAll("g.spouse")
     .data(filteredSpouses)
     .join("g")
+    .attr("class", "spouse")
+    .attr("data-nkey", (d) => `person:${d.pid}`)
     .attr("transform", (d) => `translate(${d.x},${d.y})`)
     .style("cursor", "pointer")
     .on("click", (_, d) => onPersonClick(d.pid));
@@ -285,6 +416,7 @@ function drawAncestryTree(opts: {
     .selectAll("circle.junction")
     .data(junctions)
     .join("circle")
+    .attr("class", "junction")
     .attr("cx", (d) => d.x)
     .attr("cy", (d) => d.y)
     .attr("r", 4)
