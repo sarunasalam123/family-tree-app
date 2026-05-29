@@ -19,6 +19,7 @@ app.add_middleware(
         "https://gregarious-phoenix-6ad37a.netlify.app",
         "https://aaniver.netlify.app",
         "https://staging--aaniver.netlify.app",
+        "https://family-tree-app-staging.onrender.com",
     ],
     allow_credentials=True,
     allow_methods=["*"],
