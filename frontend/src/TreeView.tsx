@@ -474,6 +474,12 @@ export default function TreeView({ initialRootId, firstNameById }: { initialRoot
     const categories: Category[] = [];
 
     const display = (id: string) => firstNameById?.get(id) ?? nameById.get(id) ?? id;
+    // Return null for people with no real name (raw GEDCOM id or blank)
+    const displayOrNull = (id: string): string | null => {
+      const n = firstNameById?.get(id) ?? nameById.get(id);
+      if (!n || n.trim() === "" || /^@?I\d+@?$/.test(n.trim())) return null;
+      return n;
+    };
 
     // Traverse a tree and collect person nodes keyed by their hierarchy depth.
     // Root person is depth 0, person nodes appear at even depths (0, 2, 4, …).
@@ -482,8 +488,11 @@ export default function TreeView({ initialRootId, firstNameById }: { initialRoot
       function walk(node: ApiNode, d: number) {
         if (node.type === "person" && d > 0 && d % 2 === 0) {
           const gen = d / 2;
-          if (!map.has(gen)) map.set(gen, []);
-          map.get(gen)!.push({ id: node.id, name: display(node.id) });
+          const name = displayOrNull(node.id);
+          if (name) {
+            if (!map.has(gen)) map.set(gen, []);
+            map.get(gen)!.push({ id: node.id, name });
+          }
         }
         for (const ch of node.children ?? []) walk(ch, d + 1);
       }
@@ -507,23 +516,24 @@ export default function TreeView({ initialRootId, firstNameById }: { initialRoot
       return "Great-".repeat(g - 2) + "Grandchildren-in-law";
     };
 
-    // Ancestors
+    // Ancestors — oldest generation first
     const ancMap = collectByDepth(anc.tree);
-    for (let g = 1; g <= ancDepth; g++) {
+    for (let g = ancDepth; g >= 1; g--) {
       const ppl = ancMap.get(g) ?? [];
       if (ppl.length > 0) categories.push({ label: ancLabels(g), people: ppl });
     }
 
-    // Build spouse lookup from all spouse_families
+    // Build spouse lookup from all spouse_families — skip unknowns
     const spouseOf = new Map<string, Entry[]>();
     const allFams = { ...(anc.spouse_families ?? {}), ...(desc.spouse_families ?? {}) };
     Object.values(allFams).forEach((fam) => {
       const h = fam.husb, w = fam.wife;
       if (!h || !w) return;
+      const hn = displayOrNull(h), wn = displayOrNull(w);
       if (!spouseOf.has(h)) spouseOf.set(h, []);
       if (!spouseOf.has(w)) spouseOf.set(w, []);
-      spouseOf.get(h)!.push({ id: w, name: display(w) });
-      spouseOf.get(w)!.push({ id: h, name: display(h) });
+      if (wn) spouseOf.get(h)!.push({ id: w, name: wn });
+      if (hn) spouseOf.get(w)!.push({ id: h, name: hn });
     });
 
     // Descendants + in-laws
@@ -551,6 +561,14 @@ export default function TreeView({ initialRootId, firstNameById }: { initialRoot
 
     return categories;
   }, [anc, desc, rootId, ancDepth, descDepth, nameById, firstNameById]);
+
+  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
+  const toggleCategory = (label: string) =>
+    setCollapsedCategories((prev) => {
+      const next = new Set(prev);
+      next.has(label) ? next.delete(label) : next.add(label);
+      return next;
+    });
 
   useEffect(() => {
     fetch(`${import.meta.env.VITE_API_URL}/api/people`, {
@@ -794,24 +812,34 @@ export default function TreeView({ initialRootId, firstNameById }: { initialRoot
             {rootId ? (firstNameById?.get(rootId) ?? nameById.get(rootId) ?? rootId) : "—"}'s Relatives
           </div>
           {relativeCategories.length === 0 && <div style={{ opacity: 0.5 }}>No data</div>}
-          {relativeCategories.map((cat) => (
-            <div key={cat.label} style={{ marginBottom: 12 }}>
-              <div style={{ fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.06em", opacity: 0.5, marginBottom: 4 }}>
-                {cat.label} ({cat.people.length})
-              </div>
-              {cat.people.map((p) => (
+          {relativeCategories.map((cat) => {
+            const collapsed = collapsedCategories.has(cat.label);
+            return (
+              <div key={cat.label} style={{ marginBottom: 8 }}>
                 <div
-                  key={p.id}
-                  onClick={() => setRootId(p.id)}
-                  style={{ cursor: "pointer", padding: "3px 6px", borderRadius: 6, marginBottom: 2, lineHeight: 1.4 }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = "#e8f0fe")}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                  onClick={() => toggleCategory(cat.label)}
+                  style={{ fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.06em",
+                    opacity: 0.65, marginBottom: collapsed ? 0 : 4, cursor: "pointer",
+                    display: "flex", justifyContent: "space-between", alignItems: "center",
+                    userSelect: "none", padding: "2px 0" }}
                 >
-                  {p.name}
+                  <span>{cat.label} ({cat.people.length})</span>
+                  <span style={{ fontSize: 10, opacity: 0.7 }}>{collapsed ? "▶" : "▼"}</span>
                 </div>
-              ))}
-            </div>
-          ))}
+                {!collapsed && cat.people.map((p) => (
+                  <div
+                    key={p.id}
+                    onClick={() => setRootId(p.id)}
+                    style={{ cursor: "pointer", padding: "3px 6px", borderRadius: 6, marginBottom: 2, lineHeight: 1.4 }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "#e8f0fe")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                  >
+                    {p.name}
+                  </div>
+                ))}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
