@@ -829,18 +829,18 @@ export default function TreeView({ initialRootId, firstNameById }: { initialRoot
         </div>
 
         {/* Relatives side panel */}
-        <div style={{ border: "1px solid rgba(0,0,0,0.12)", borderRadius: 16, overflowY: "auto", padding: "12px 14px", background: "#fafafa", fontSize: 13 }}>
+        <div style={{ border: "1px solid rgba(0,0,0,0.12)", borderRadius: 16, overflowY: "auto", padding: "12px 14px", background: "#fafafa", fontSize: 13, color: "#333" }}>
           <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6 }}>
             {rootId ? (firstNameById?.get(rootId) ?? nameById.get(rootId) ?? rootId) : "—"}'s Relatives
           </div>
           <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
             <button
               onClick={() => setCollapsedCategories(new Set())}
-              style={{ fontSize: 10, padding: "2px 7px", borderRadius: 4, border: "1px solid #ccc", background: "white", cursor: "pointer" }}
+              style={{ fontSize: 10, padding: "2px 7px", borderRadius: 4, border: "1px solid #ccc", background: "white", cursor: "pointer", color: "#333" }}
             >Expand all</button>
             <button
               onClick={() => setCollapsedCategories(new Set(relativeCategories.map((c) => c.label)))}
-              style={{ fontSize: 10, padding: "2px 7px", borderRadius: 4, border: "1px solid #ccc", background: "white", cursor: "pointer" }}
+              style={{ fontSize: 10, padding: "2px 7px", borderRadius: 4, border: "1px solid #ccc", background: "white", cursor: "pointer", color: "#333" }}
             >Collapse all</button>
           </div>
           {relativeCategories.length === 0 && <div style={{ opacity: 0.5 }}>No data</div>}
