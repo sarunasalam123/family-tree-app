@@ -376,6 +376,7 @@ function drawAncestryTree(opts: {
     .join("g")
     .attr("class", "person")
     .attr("data-nkey", (d) => `person:${d.data.id}`)
+    .attr("data-scalable", "1")
     .attr("transform", (d) => `translate(${d.x},${d.y})`)
     .style("cursor", "pointer")
     .on("click", (_, d) => onPersonClick(d.data.id));
@@ -401,6 +402,7 @@ function drawAncestryTree(opts: {
     .join("g")
     .attr("class", "spouse")
     .attr("data-nkey", (d) => `person:${d.pid}`)
+    .attr("data-scalable", "1")
     .attr("transform", (d) => `translate(${d.x},${d.y})`)
     .style("cursor", "pointer")
     .on("click", (_, d) => onPersonClick(d.pid));
@@ -417,6 +419,7 @@ function drawAncestryTree(opts: {
     .data(junctions)
     .join("circle")
     .attr("class", "junction")
+    .attr("data-scalable", "1")
     .attr("cx", (d) => d.x)
     .attr("cy", (d) => d.y)
     .attr("r", 4)
@@ -565,8 +568,32 @@ export default function TreeView({ initialRootId, firstNameById }: { initialRoot
     // Set up zoom behavior
     const zoomBehavior = d3
       .zoom<SVGSVGElement, unknown>()
-      .scaleExtent([0.25, 2.5])
-      .on("zoom", (event) => g.attr("transform", event.transform));
+      .scaleExtent([0.1, 2.5])
+      .on("zoom", (event) => {
+        const { k } = event.transform;
+        g.attr("transform", event.transform);
+
+        // Semantic zoom: scale nodes inversely so they stay legible when zoomed out.
+        // Visual size = 1/k, clamped so nodes don't grow too large when very zoomed out.
+        const nodeScale = Math.min(1 / k, 3);
+        svg.selectAll<SVGGElement, unknown>("[data-scalable]").each(function () {
+          const el = d3.select(this);
+          const tag = (this as Element).tagName.toLowerCase();
+          if (tag === "circle") {
+            // Junction dot: scale radius
+            const baseR = 4;
+            el.attr("r", baseR * nodeScale);
+          } else {
+            // Person/spouse group: apply inverse scale transform around its own origin
+            const tx = el.attr("transform") ?? "";
+            // Extract existing translate
+            const m = tx.match(/translate\(([^,]+),([^)]+)\)/);
+            if (m) {
+              el.attr("transform", `translate(${m[1]},${m[2]}) scale(${nodeScale})`);
+            }
+          }
+        });
+      });
 
     svg.call(zoomBehavior);
 
