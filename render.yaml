@@ -2,6 +2,17 @@ services:
   - type: web
     name: family-tree-api
     runtime: python
+    branch: main
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: bash backend/start.sh
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.0"
+
+  - type: web
+    name: family-tree-api-staging
+    runtime: python
+    branch: staging
     buildCommand: pip install -r backend/requirements.txt
     startCommand: bash backend/start.sh
     envVars:
