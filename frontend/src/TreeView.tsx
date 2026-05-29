@@ -538,6 +538,13 @@ export default function TreeView({ initialRootId, firstNameById }: { initialRoot
 
     // Descendants + in-laws
     const descMap = collectByDepth(desc.tree);
+
+    // Spouses of the root person — insert before Children
+    const rootSpouses = (spouseOf.get(rootId) ?? []).filter(
+      (sp, i, arr) => arr.findIndex((x) => x.id === sp.id) === i
+    );
+    if (rootSpouses.length > 0) categories.push({ label: "Spouse(s)", people: rootSpouses });
+
     for (let g = 1; g <= descDepth; g++) {
       const ppl = descMap.get(g) ?? [];
       if (ppl.length > 0) {
@@ -562,7 +569,21 @@ export default function TreeView({ initialRootId, firstNameById }: { initialRoot
     return categories;
   }, [anc, desc, rootId, ancDepth, descDepth, nameById, firstNameById]);
 
-  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
+  // Recompute default collapsed state whenever categories change:
+  // only Parents and Children are open by default; everything else starts collapsed.
+  const defaultCollapsed = useMemo(
+    () => new Set(relativeCategories.map((c) => c.label).filter((l) => l !== "Parents" && l !== "Children" && l !== "Spouse(s)")),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [relativeCategories.map((c) => c.label).join(",")]
+  );
+  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(defaultCollapsed);
+  // Sync when the available categories change (e.g. root or depth changes)
+  const prevCatKey = useRef("");
+  const catKey = relativeCategories.map((c) => c.label).join(",");
+  if (catKey !== prevCatKey.current) {
+    prevCatKey.current = catKey;
+    setCollapsedCategories(defaultCollapsed);
+  }
   const toggleCategory = (label: string) =>
     setCollapsedCategories((prev) => {
       const next = new Set(prev);
@@ -808,8 +829,18 @@ export default function TreeView({ initialRootId, firstNameById }: { initialRoot
 
         {/* Relatives side panel */}
         <div style={{ border: "1px solid rgba(0,0,0,0.12)", borderRadius: 16, overflowY: "auto", padding: "12px 14px", background: "#fafafa", fontSize: 13 }}>
-          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 10 }}>
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6 }}>
             {rootId ? (firstNameById?.get(rootId) ?? nameById.get(rootId) ?? rootId) : "—"}'s Relatives
+          </div>
+          <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+            <button
+              onClick={() => setCollapsedCategories(new Set())}
+              style={{ fontSize: 10, padding: "2px 7px", borderRadius: 4, border: "1px solid #ccc", background: "white", cursor: "pointer" }}
+            >Expand all</button>
+            <button
+              onClick={() => setCollapsedCategories(new Set(relativeCategories.map((c) => c.label)))}
+              style={{ fontSize: 10, padding: "2px 7px", borderRadius: 4, border: "1px solid #ccc", background: "white", cursor: "pointer" }}
+            >Collapse all</button>
           </div>
           {relativeCategories.length === 0 && <div style={{ opacity: 0.5 }}>No data</div>}
           {relativeCategories.map((cat) => {
