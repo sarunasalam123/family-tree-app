@@ -110,7 +110,7 @@ export function ConnectMiniGraphTab({
   }, [result, nameById]);
 
   return (
-    <div style={{ display: "grid", gridTemplateRows: "auto 1fr", gap: 10, height: "80vh", width: "80vw", padding: 16 }}>
+    <div style={{ display: "grid", gridTemplateRows: "auto 1fr", gap: 10, height: "100%", width: "100%", padding: 16, boxSizing: "border-box" }}>
       <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
         <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           Person A{" "}

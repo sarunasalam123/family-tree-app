@@ -105,7 +105,7 @@ function drawAncestryTree(opts: {
       .append("text")
       .attr("text-anchor", "middle")
       .attr("dominant-baseline", "middle")
-      .attr("font-size", 16)
+      .attr("font-size", 19)
       .text(label);
   }
 
