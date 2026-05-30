@@ -169,7 +169,7 @@ export default function App() {
           {tab === "connect" ? <div style={{ flex: 1, minHeight: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}><ConnectMiniGraphTab people={peopleForDropdown} nameById={firstNameById} aId={connectAId} setAId={setConnectAId} bId={connectBId} setBId={setConnectBId} result={connectResult} setResult={setConnectResult} error={connectError} setError={setConnectError} /></div> : null}
 
           {tab === "commonpair" ? (
-            <div style={{ padding: 16, display: "flex", flexDirection: "column", overflow: "auto", flex: 1, boxSizing: "border-box" }}>
+            <div style={{ display: "flex", flexDirection: "column", overflow: "hidden", flex: 1 }}>
               <CommonAncestorPairTab
                 people={peopleForDropdown}
                 nameById={firstNameById}

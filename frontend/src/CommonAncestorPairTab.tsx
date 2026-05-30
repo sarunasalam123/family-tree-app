@@ -771,7 +771,7 @@ export default function CommonAncestorPairTab({
   }, [prunedTree, nameById, onOpenInTree]);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12, height: "80vh", overflow: "auto", flex: 1, width: "80vw" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 12, height: "100%", overflow: "auto", flex: 1, width: "100%", boxSizing: "border-box" }}>
       <div style={{ display: "flex", gap: 12, alignItems: "center", position: "relative", zIndex: 10 }}>
         <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           Person A
