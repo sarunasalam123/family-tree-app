@@ -164,9 +164,9 @@ export default function App() {
           <button onClick={handleLogout} style={{ padding: "6px 12px", cursor: "pointer" }}>Logout</button>
         </div>
 
-        <div style={{ flex: 1, width: "100%", minHeight: 0, overflow: "hidden", display: "flex" }}>
+        <div style={{ flex: 1, width: "100%", minHeight: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}>
           {tab === "tree" ? <TreeView key={rootId} initialRootId={rootId} firstNameById={firstNameById} /> : null}
-          {tab === "connect" ? <div style={{ display: "flex", flexDirection: "column", overflow: "hidden", flex: 1 }}><ConnectMiniGraphTab people={peopleForDropdown} nameById={firstNameById} aId={connectAId} setAId={setConnectAId} bId={connectBId} setBId={setConnectBId} result={connectResult} setResult={setConnectResult} error={connectError} setError={setConnectError} /></div> : null}
+          {tab === "connect" ? <div style={{ flex: 1, minHeight: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}><ConnectMiniGraphTab people={peopleForDropdown} nameById={firstNameById} aId={connectAId} setAId={setConnectAId} bId={connectBId} setBId={setConnectBId} result={connectResult} setResult={setConnectResult} error={connectError} setError={setConnectError} /></div> : null}
 
           {tab === "commonpair" ? (
             <div style={{ padding: 16, display: "flex", flexDirection: "column", overflow: "auto", flex: 1, boxSizing: "border-box" }}>
