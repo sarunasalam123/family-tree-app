@@ -49,7 +49,6 @@ export default function CommonAncestorPairTab({
   const [selectedCandidate, setSelectedCandidate] = useState<number>(0);
   const [prunedTree, setPrunedTree] = useState<any | null>(null);
   const [renderError, setRenderError] = useState<string | null>(null);
-  const [debugOpen, setDebugOpen] = useState<boolean>(false);
   const [debugData, setDebugData] = useState<any | null>(null);
   const [showDuplicates, setShowDuplicates] = useState<boolean>(false);
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -907,22 +906,13 @@ export default function CommonAncestorPairTab({
         return null;
       })()}
 
-      {/* Debug / error panel */}
+      {/* Error panel */}
       <div style={{ marginTop: 12 }}>
         {renderError ? (
           <div style={{ border: '1px solid #f5c6cb', background: '#fff5f6', padding: 8, borderRadius: 6 }}>
             <div style={{ color: '#721c24', fontWeight: 700 }}>Render error</div>
             <div style={{ color: '#721c24', whiteSpace: 'pre-wrap', fontSize: 13 }}>{renderError}</div>
           </div>
-        ) : null}
-
-        <div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center' }}>
-          <button onClick={() => setDebugOpen(!debugOpen)} style={{ fontSize: 12 }}>{debugOpen ? 'Hide debug' : 'Show debug'}</button>
-          <div style={{ color: '#666', fontSize: 12 }}>{debugData ? `Candidates: ${debugData.candidates?.length ?? 0}, PrunedTrees: ${Array.isArray(debugData.prunedTrees) ? debugData.prunedTrees.length : 0}` : 'No debug data'}</div>
-        </div>
-
-        {debugOpen && debugData ? (
-          <pre style={{ marginTop: 8, background: '#f7f7f7', padding: 8, borderRadius: 6, maxHeight: 280, overflow: 'auto' }}>{JSON.stringify(debugData, null, 2)}</pre>
         ) : null}
       </div>
     </div>
